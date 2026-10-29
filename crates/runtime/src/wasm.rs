@@ -379,8 +379,19 @@ async fn handle(request: Request, sender: Sender) -> Result<Value, Error> {
             let all: std::collections::HashMap<String, Session> =
                 decode(session_all().await.map_err(|_| Error::Storage)?)?;
             for (key, mut session) in all {
-                if session.valid(&session.target, now()) && session.bound_to(&sender) {
+                if session.valid(&session.target, now())
+                    && session.bound_to(&sender)
+                    && Target::parse(sender.current_url())
+                        .is_ok_and(|target| target == session.target)
+                {
                     session.pending = false;
+                    if let Some(content) = session.content.as_mut() {
+                        let filter = crate::view::ProfileFilter::from_url(sender.current_url());
+                        if content.profile_filter != filter {
+                            content.profile_filter = filter;
+                            content.visible_posts = 5;
+                        }
+                    }
                     session_set(&key, js(&session))
                         .await
                         .map_err(|_| Error::Storage)?;
@@ -480,13 +491,13 @@ async fn handle(request: Request, sender: Sender) -> Result<Value, Error> {
                     )
                 }
                 Target::Profile { handle } => {
-                    let profile = get_profile(&target).await;
+                    let (profile, feed) =
+                        futures::join!(get_profile(&target), timeline(&session, &mut s, None));
                     if let Err(error @ (Error::Protected | Error::Suspended | Error::Deleted)) =
                         &profile
                     {
                         return Err(error.clone());
                     }
-                    let feed = timeline(&session, &mut s, None).await;
                     if let Err(error) = &profile
                         && feed.is_err()
                     {
@@ -518,6 +529,7 @@ async fn handle(request: Request, sender: Sender) -> Result<Value, Error> {
                     };
                     let feed_error = feed.as_ref().err().map(ToString::to_string);
                     s.content = Some(crate::view::Content {
+                        profile_filter: crate::view::ProfileFilter::from_url(sender.current_url()),
                         profile,
                         timeline: feed.ok(),
                         profile_error,
@@ -540,17 +552,44 @@ async fn handle(request: Request, sender: Sender) -> Result<Value, Error> {
             cursor,
         } => {
             let mut s = load_session(&session, Some(&target), &sender).await?;
-            let next = timeline(&session, &mut s, cursor.as_deref()).await?;
             let content = s.content.as_mut().ok_or(Error::Expired)?;
-            let feed = content.timeline.as_mut().ok_or(Error::InvalidTarget)?;
-            for post in next.posts {
-                if !feed.posts.iter().any(|p| p.id == post.id) {
-                    feed.posts.push(post);
+            if !content.reveal_buffered() {
+                let expected = content
+                    .timeline
+                    .as_ref()
+                    .ok_or(Error::InvalidTarget)?
+                    .next_cursor
+                    .as_ref();
+                if expected.is_none() || expected != cursor.as_ref() {
+                    return Err(Error::InvalidTarget);
                 }
+                let visible = content.visible_limit();
+                let next = match timeline(&session, &mut s, cursor.as_deref()).await {
+                    Ok(next) => next,
+                    Err(error) => {
+                        let content = s.content.as_mut().ok_or(Error::Expired)?;
+                        content.timeline_error = Some(error.to_string());
+                        session_set(&session_key(&session)?, js(&s))
+                            .await
+                            .map_err(|_| Error::Storage)?;
+                        return Ok(
+                            json!({"view":crate::view::reader(s.content.as_ref().unwrap(),&target,&session,s.restricted)}),
+                        );
+                    }
+                };
+                let content = s.content.as_mut().ok_or(Error::Expired)?;
+                let feed = content.timeline.as_mut().ok_or(Error::InvalidTarget)?;
+                for post in next.posts {
+                    if !feed.posts.iter().any(|p| p.id == post.id) {
+                        feed.posts.push(post);
+                    }
+                }
+                feed.next_cursor = next
+                    .next_cursor
+                    .filter(|next| Some(next) != cursor.as_ref());
+                content.visible_posts = (visible + 5).min(feed.posts.len());
+                content.timeline_error = None;
             }
-            feed.next_cursor = next
-                .next_cursor
-                .filter(|next| Some(next) != cursor.as_ref());
             session_set(&session_key(&session)?, js(&s))
                 .await
                 .map_err(|_| Error::Storage)?;

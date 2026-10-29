@@ -45,7 +45,7 @@ impl Target {
             .skip(1)
             .collect();
         match parts.as_slice() {
-            [handle] => valid_handle(handle)
+            [handle] | [handle, "with_replies" | "reposts" | "media"] => valid_handle(handle)
                 .map(|handle| Self::Profile { handle })
                 .ok_or(Error::InvalidTarget),
             [handle, "status", id]

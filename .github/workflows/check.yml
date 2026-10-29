@@ -35,6 +35,7 @@ jobs:
           python3 tests/browser/inline_contracts.py
           python3 tests/browser/native_fidelity.py
           python3 tests/browser/lifecycle.py
+          python3 tests/browser/infinite_scroll.py
       - name: Firefox extension integration
         run: |
           curl -fsSL https://github.com/mozilla/geckodriver/releases/download/v0.37.1/geckodriver-v0.37.1-linux64.tar.gz -o /tmp/geckodriver.tar.gz

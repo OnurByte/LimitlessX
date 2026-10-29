@@ -5,6 +5,8 @@
   let timer, generation = 0, lastUrl = location.href;
   let styleReady, themeSheet, themeSignature, host, root, mountedUrl, revision = 0, suppressedRoute, inspectedKey, booting = true, cachedPresentation, deferredPresentation, replacingNative = false;
   const hiddenNotices = new Map();
+  const descriptions = new WeakMap(), scrollActions = new WeakMap();
+  let scrollObserver, scrollArmed = false, lastAutoScroll = -1, autoBusy = false;
   const restoreNotices = () => {
     for (const [node, original] of hiddenNotices) {
       node.hidden = original.hidden;
@@ -13,11 +15,12 @@
     hiddenNotices.clear();
   };
   const clearInline = () => {
+    scrollObserver?.disconnect(); scrollArmed = false; lastAutoScroll = -1; autoBusy = false;
     ++revision; themeSheet = undefined; themeSignature = undefined; restoreNotices(); host?.remove(); host = undefined; root = undefined; mountedUrl = undefined;
   };
   // Generic DOM transport: Rust supplies the complete view and each action.
   const tags = new Set(['main','header','div','section','article','p','h1','h2','strong','span','time','img','video','a','button','svg','path','br']);
-  const attributes = new Set(['class','href','src','alt','loading','crossorigin','referrerpolicy','poster','controls','preload','type','role','target','rel','viewBox','fill','d','aria-label','aria-hidden','tabindex','title','datetime']);
+  const attributes = new Set(['class','href','src','alt','loading','crossorigin','referrerpolicy','poster','controls','preload','type','role','target','rel','viewBox','fill','d','aria-label','aria-hidden','tabindex','title','datetime','data-autoload','data-post-id','playsinline']);
   const element = description => {
     if (typeof description === 'string') return document.createTextNode(description);
     if (!description || !tags.has(description.tag)) throw new Error('Unsupported DOM element');
@@ -31,7 +34,9 @@
     }
     for (const child of description.children ?? []) node.append(element(child));
     if (node.tagName === 'A') node.addEventListener('click', event => event.stopPropagation());
+    descriptions.set(node, JSON.stringify(description));
     if (description.action) {
+      if (node.hasAttribute('data-autoload')) scrollActions.set(node, description.action);
       const activate = event => { if (!event.isTrusted) return; event.stopPropagation(); node.disabled = true; run(description.action); };
       node.addEventListener('click', activate);
       node.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); activate(event); } });
@@ -40,7 +45,21 @@
   };
   const apply = async data => {
     if (!data) return;
-    if (data.view && root) { cachedPresentation = data; root.replaceChildren(element(data.view)); }
+    if (data.view && root) {
+      cachedPresentation = data;
+      const next = element(data.view), current = root.firstElementChild;
+      if (current?.matches('.x-reader') && next.matches('.x-reader')) {
+        const oldPosts = new Map([...current.children].filter(n => n.hasAttribute('data-post-id')).map(n => [n.getAttribute('data-post-id'), n]));
+        const desired = [...next.children].map((n, index) => {
+          const old = n.hasAttribute('data-post-id') ? oldPosts.get(n.getAttribute('data-post-id')) : current.children[index];
+          return old && !old.matches(':disabled') && !old.querySelector(':disabled') && descriptions.get(old) === descriptions.get(n) ? old : n;
+        });
+        const keep = new Set(desired);
+        for (const child of [...current.childNodes]) if (!keep.has(child)) child.remove();
+        desired.forEach((child, index) => { if (current.children[index] !== child) current.insertBefore(child, current.children[index] ?? null); });
+      } else root.replaceChildren(next);
+      observeScroll();
+    }
     else if (data.message && root) {
       root.replaceChildren(document.createTextNode(data.message));
       const retry = document.createElement('button'); retry.type = 'button'; retry.textContent = 'Try again';
@@ -49,6 +68,37 @@
     }
     if (data.load) await run(data.load);
   };
+  const checkScroll = () => {
+    if (!scrollArmed || autoBusy || !host?.isConnected || Math.abs(scrollY - lastAutoScroll) < 2) return;
+    const sentinel = root?.querySelector('[data-autoload]');
+    if (!sentinel || sentinel.disabled) return;
+    const box = sentinel.getBoundingClientRect();
+    if (box.top > innerHeight + 240 || box.bottom < 0) return;
+    const action = scrollActions.get(sentinel);
+    if (!action) return;
+    lastAutoScroll = scrollY; autoBusy = true; sentinel.disabled = true;
+    sentinel.setAttribute('aria-busy', 'true');
+    run(action).finally(() => { autoBusy = false; });
+  };
+  const observeScroll = () => {
+    scrollObserver?.disconnect();
+    scrollObserver = new IntersectionObserver(() => checkScroll(), { rootMargin: '240px' });
+    const sentinel = root?.querySelector('[data-autoload]');
+    if (sentinel) scrollObserver.observe(sentinel);
+  };
+  // A short feed may not yet make the document scrollable. Downward intent still loads its next batch.
+  addEventListener('wheel', event => {
+    if (!event.isTrusted || event.deltaY <= 0) return;
+    scrollArmed = true; lastAutoScroll = -Infinity; requestAnimationFrame(checkScroll);
+  }, { passive: true });
+  addEventListener('keydown', event => {
+    if (!event.isTrusted || !['End','PageDown','ArrowDown',' '].includes(event.key) || event.target?.closest?.('input,textarea,[contenteditable=true]')) return;
+    scrollArmed = true; lastAutoScroll = -Infinity; requestAnimationFrame(checkScroll);
+  });
+  addEventListener('scroll', event => {
+    if (!event.isTrusted) return;
+    requestAnimationFrame(checkScroll);
+  }, { passive: true });
   const run = async message => {
     const attempt = ++revision, sourceUrl = location.href;
     root?.setAttribute('aria-busy', 'true');

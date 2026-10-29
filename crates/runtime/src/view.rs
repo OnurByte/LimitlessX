@@ -76,8 +76,53 @@ pub fn error(error: &Error, retry: Option<Value>) -> Node {
         "alert",
     )])
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ProfileFilter {
+    #[default]
+    Posts,
+    Replies,
+    Reposts,
+    Media,
+}
+impl ProfileFilter {
+    pub fn from_url(url: &str) -> Self {
+        match url::Url::parse(url)
+            .ok()
+            .as_ref()
+            .map(|u| {
+                u.path()
+                    .trim_end_matches('/')
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or("")
+                    .to_string()
+            })
+            .as_deref()
+        {
+            Some("with_replies") => Self::Replies,
+            Some("reposts") => Self::Reposts,
+            Some("media") => Self::Media,
+            _ => Self::Posts,
+        }
+    }
+    fn accepts(self, post: &Post, owner: Option<&Profile>) -> bool {
+        match self {
+            Self::Posts => true,
+            Self::Replies => post.replying_to.is_some(),
+            Self::Reposts => {
+                owner.is_some_and(|p| !p.handle.eq_ignore_ascii_case(&post.author.handle))
+            }
+            Self::Media => !post.media.is_empty(),
+        }
+    }
+}
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Content {
+    #[serde(default)]
+    pub visible_posts: usize,
+    #[serde(default)]
+    pub profile_filter: ProfileFilter,
     pub profile: Option<Profile>,
     pub post: Option<Post>,
     pub timeline: Option<Timeline>,
@@ -88,6 +133,24 @@ pub struct Content {
     pub conversation: Option<limitless_core::Conversation>,
     #[serde(default)]
     pub replies_error: Option<String>,
+}
+impl Content {
+    pub fn visible_limit(&self) -> usize {
+        self.visible_posts.max(5)
+    }
+    pub fn reveal_buffered(&mut self) -> bool {
+        let len = self.timeline.as_ref().map_or(0, |t| {
+            t.posts
+                .iter()
+                .filter(|p| self.profile_filter.accepts(p, self.profile.as_ref()))
+                .count()
+        });
+        if self.visible_limit() >= len {
+            return false;
+        }
+        self.visible_posts = (self.visible_limit() + 5).min(len);
+        true
+    }
 }
 fn svg(path: &str, class: &str) -> Node {
     attr(
@@ -203,9 +266,14 @@ fn author(p: &Profile, detailed: bool) -> Node {
 }
 fn avatar(p: &Profile, class: &str) -> Node {
     if let Some(src) = &p.avatar {
+        let src = if class == "x-profile-avatar" {
+            src.replace("_normal.", "_200x200.")
+        } else {
+            src.clone()
+        };
         attr(
             attr(
-                attr(attr(el("img", class, vec![]), "src", src), "alt", ""),
+                attr(attr(el("img", class, vec![]), "src", &src), "alt", ""),
                 "crossorigin",
                 "anonymous",
             ),
@@ -265,15 +333,25 @@ fn profile(p: &Profile) -> Node {
     }
     let mut details = vec![];
     if let Some(location) = &p.location {
-        details.push(el("span", "x-profile-location", vec![text(location)]));
+        details.push(el(
+            "span",
+            "x-profile-location",
+            vec![
+                svg(crate::icons::LOCATION, "x-profile-icon"),
+                text(location),
+            ],
+        ));
     }
     if let Some(website) = &p.website {
-        let label = url::Url::parse(website)
-            .ok()
-            .and_then(|u| u.host_str().map(str::to_owned))
-            .unwrap_or_else(|| website.clone());
+        let label = website
+            .trim_start_matches("https://")
+            .trim_end_matches('/')
+            .to_string();
         details.push(attr(
-            link(&label, website.clone()),
+            link(&label, website.clone()).with_children(vec![
+                svg(crate::icons::WEBSITE, "x-profile-icon"),
+                text(label),
+            ]),
             "class",
             "x-profile-website",
         ));
@@ -281,11 +359,30 @@ fn profile(p: &Profile) -> Node {
     if let Some(joined) = &p.joined {
         let fields: Vec<_> = joined.split_whitespace().collect();
         let label = if fields.len() >= 6 {
-            format!("Joined {} {}", fields[1], fields[5])
+            let month = match fields[1] {
+                "Jan" => "January",
+                "Feb" => "February",
+                "Mar" => "March",
+                "Apr" => "April",
+                "May" => "May",
+                "Jun" => "June",
+                "Jul" => "July",
+                "Aug" => "August",
+                "Sep" => "September",
+                "Oct" => "October",
+                "Nov" => "November",
+                "Dec" => "December",
+                other => other,
+            };
+            format!("Joined {month} {}", fields[5])
         } else {
             format!("Joined {joined}")
         };
-        details.push(el("span", "x-profile-joined", vec![text(label)]));
+        details.push(el(
+            "span",
+            "x-profile-joined",
+            vec![svg(crate::icons::JOINED, "x-profile-icon"), text(label)],
+        ));
     }
     if !details.is_empty() {
         info.push(el("div", "x-profile-details", details));
@@ -381,7 +478,7 @@ fn date_label(value: &str, detailed: bool) -> String {
 fn media(p: &Post) -> Node {
     el(
         "div",
-        "media-grid",
+        &format!("media-grid media-count-{}", p.media.len().min(4)),
         p.media
             .iter()
             .map(|m| {
@@ -417,6 +514,7 @@ fn media(p: &Post) -> Node {
                         "crossorigin",
                         "anonymous",
                     );
+                    n = attr(n, "playsinline", "");
                     if let Some(preview) = &m.preview {
                         n = attr(n, "poster", preview);
                     }
@@ -562,17 +660,25 @@ fn post(p: &Post, token: &str, detailed: bool) -> Node {
             vec![avatar(&p.author, "post-avatar"), header],
         )];
         children.extend(body);
-        el("article", "post-card detailed-post", children)
+        attr(
+            el("article", "post-card detailed-post", children),
+            "data-post-id",
+            &p.id,
+        )
     } else {
         body.insert(0, header);
         body.push(metrics(p, false));
-        el(
-            "article",
-            "post-card",
-            vec![
-                avatar(&p.author, "post-avatar"),
-                el("div", "post-content", body),
-            ],
+        attr(
+            el(
+                "article",
+                "post-card",
+                vec![
+                    avatar(&p.author, "post-avatar"),
+                    el("div", "post-content", body),
+                ],
+            ),
+            "data-post-id",
+            &p.id,
         )
     }
 }
@@ -584,22 +690,29 @@ pub fn reader(content: &Content, target: &Target, token: &str, _restricted: bool
             el(
                 "div",
                 "x-profile-tabs",
-                vec![
-                    el("span", "x-tab active", vec![text("Posts")]),
+                [
+                    ("Posts", "", ProfileFilter::Posts),
+                    ("Replies", "/with_replies", ProfileFilter::Replies),
+                    ("Reposts", "/reposts", ProfileFilter::Reposts),
+                    ("Media", "/media", ProfileFilter::Media),
+                ]
+                .into_iter()
+                .map(|(label, path, filter)| {
                     attr(
-                        link(
-                            "Replies",
-                            format!("{}/with_replies", target.canonical_url()),
+                        attr(
+                            link(label, format!("{}{path}", target.canonical_url())),
+                            "target",
+                            "_self",
                         ),
                         "class",
-                        "x-tab",
-                    ),
-                    attr(
-                        link("Media", format!("{}/media", target.canonical_url())),
-                        "class",
-                        "x-tab",
-                    ),
-                ],
+                        if content.profile_filter == filter {
+                            "x-tab active"
+                        } else {
+                            "x-tab"
+                        },
+                    )
+                })
+                .collect(),
             ),
             "role",
             "navigation",
@@ -618,21 +731,49 @@ pub fn reader(content: &Content, target: &Target, token: &str, _restricted: bool
         children.push(post(p, token, true));
     }
     if let Some(t) = &content.timeline {
-        if t.posts.is_empty() {
+        if !t
+            .posts
+            .iter()
+            .any(|p| content.profile_filter.accepts(p, content.profile.as_ref()))
+        {
             children.push(el(
                 "p",
                 "empty-state",
-                vec![text("No public posts were returned by the provider.")],
+                vec![text(
+                    "No matching public posts were returned by the provider.",
+                )],
             ));
         }
-        for p in &t.posts {
+        let filtered: Vec<_> = t
+            .posts
+            .iter()
+            .filter(|p| content.profile_filter.accepts(p, content.profile.as_ref()))
+            .collect();
+        for p in filtered.iter().take(content.visible_limit()) {
             children.push(post(p, token, false));
         }
-        if let Some(cursor) = &t.next_cursor {
-            children.push(button(
-                "Load more posts",
-                json!({"op":"timeline","session":token,"target":target,"cursor":cursor}),
-            ));
+        if filtered.len() > content.visible_limit() || t.next_cursor.is_some() {
+            let cursor = if filtered.len() > content.visible_limit() {
+                None
+            } else {
+                t.next_cursor.as_deref()
+            };
+            let mut sentinel = attr(
+                button(
+                    if content.timeline_error.is_some() {
+                        "Try again"
+                    } else {
+                        "Load more posts"
+                    },
+                    json!({"op":"timeline","session":token,"target":target,"cursor":cursor}),
+                ),
+                "class",
+                "x-scroll-sentinel",
+            );
+            if content.timeline_error.is_none() {
+                sentinel = attr(sentinel, "data-autoload", "true");
+            }
+            children.push(sentinel);
         }
     }
     if let Some(c) = &content.conversation {
