@@ -116,7 +116,7 @@ enum RawPost {
         provider: String,
         id: String,
         text: String,
-        author: RawProfile,
+        author: Box<RawProfile>,
         created_at: Option<String>,
         media: Option<RawMedia>,
     },

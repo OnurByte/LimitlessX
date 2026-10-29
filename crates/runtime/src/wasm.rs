@@ -20,7 +20,11 @@ extern "C" {
     #[wasm_bindgen(js_namespace=limitlessBridge,catch)]
     async fn session_all() -> Result<JsValue, JsValue>;
     #[wasm_bindgen(js_namespace=limitlessBridge,catch)]
-    async fn open_tab(url: &str) -> Result<(), JsValue>;
+    async fn new_tab() -> Result<i32, JsValue>;
+    #[wasm_bindgen(js_namespace=limitlessBridge,catch)]
+    async fn navigate_tab(tab_id: i32, url: &str) -> Result<(), JsValue>;
+    #[wasm_bindgen(js_namespace=limitlessBridge,catch)]
+    async fn show_in_tab(tab_id: i32, context: JsValue) -> Result<JsValue, JsValue>;
     #[wasm_bindgen(js_namespace=limitlessBridge,catch)]
     async fn active_context() -> Result<JsValue, JsValue>;
     #[wasm_bindgen(js_namespace=limitlessBridge)]
@@ -56,6 +60,10 @@ enum Request {
     OpenDetected {
         notices: Vec<Notice>,
     },
+    AutoDetected {
+        notices: Vec<Notice>,
+    },
+    Pending,
     Current,
     OpenCurrent,
     OpenManual {
@@ -94,21 +102,28 @@ fn session_key(token: &str) -> Result<String, Error> {
         Err(Error::Expired)
     }
 }
-async fn load_session(token: &str, target: Option<&Target>) -> Result<Session, Error> {
+async fn load_session(
+    token: &str,
+    target: Option<&Target>,
+    sender: &Sender,
+) -> Result<Session, Error> {
     let value = session_get(&session_key(token)?)
         .await
         .map_err(|_| Error::Storage)?;
     let s: Session = decode(value).map_err(|_| Error::Expired)?;
-    if !s.valid(target.unwrap_or(&s.target), now()) {
+    if !s.valid(target.unwrap_or(&s.target), now()) || !s.bound_to(sender) {
         return Err(Error::Expired);
     }
     Ok(s)
 }
 async fn create_reader(
-    sender: &Sender,
+    tab_id: i32,
     target: Target,
+    source: Target,
     is_restricted: bool,
     expires: Option<f64>,
+    pending: bool,
+    deliberate: bool,
 ) -> Result<Value, Error> {
     // Only live reader contexts are retained in browser memory. No disk-backed session ledger.
     let all: std::collections::HashMap<String, Session> =
@@ -132,26 +147,35 @@ async fn create_reader(
         .map(|b| format!("{b:02x}"))
         .collect();
     let s = Session {
-        target,
+        target: target.clone(),
+        source,
+        pending,
+        deliberate,
         restricted: is_restricted,
         expires: expires.unwrap_or(now() + 10. * 60. * 1000.),
-        tab_id: sender.tab_id.unwrap_or(-1),
+        tab_id,
         allowed_posts: vec![],
+        content: None,
     };
     session_set(&session_key(&token)?, js(&s))
         .await
         .map_err(|_| Error::Storage)?;
-    let target = serde_json::to_string(&s.target).map_err(|_| Error::InvalidTarget)?;
-    let mut url = url::Url::parse(&format!("{}reader.html", sender.extension_origin))
-        .map_err(|_| Error::Unauthorized)?;
-    url.query_pairs_mut()
-        .append_pair("session", &token)
-        .append_pair("target", &target);
-    open_tab(url.as_ref())
-        .await
-        .map_err(|_| Error::Unavailable)?;
+    Ok(
+        json!({"session":token,"target":target,"view":crate::view::loading(&target),"load":{"op":"read","session":token,"target":target}}),
+    )
+}
+async fn deliver(tab_id: i32, context: Value) -> Result<Value, Error> {
+    let result: Value = decode(
+        show_in_tab(tab_id, js(&context))
+            .await
+            .map_err(|_| Error::Unavailable)?,
+    )?;
+    if result["ok"] != true {
+        return Err(Error::Unavailable);
+    }
     Ok(json!({"opened":true}))
 }
+
 thread_local! {static COOLDOWN:Cell<f64>=const{Cell::new(0.)};}
 struct Timer(i32);
 impl Drop for Timer {
@@ -288,6 +312,7 @@ async fn timeline(
     Ok(t)
 }
 async fn handle(request: Request, sender: Sender) -> Result<Value, Error> {
+    let automatic = matches!(&request, Request::AutoDetected { .. });
     match request {
         Request::Ping => Ok(json!({"runtime":"rust-wasm"})),
         Request::Record => Ok(json!(limitless_storage::record(None, None, false).await?)),
@@ -296,18 +321,62 @@ async fn handle(request: Request, sender: Sender) -> Result<Value, Error> {
         )),
         Request::Clear => Ok(json!(limitless_storage::record(None, None, true).await?)),
         Request::Inspect { notices } => {
-            let target = Target::parse(&sender.url)?;
+            let target = Target::parse(sender.current_url())?;
             Ok(json!({"eligible":restricted(&target,&notices),"target":target}))
         }
-        Request::OpenDetected { notices } => {
-            let target = Target::parse(&sender.url)?;
+        Request::OpenDetected { notices } | Request::AutoDetected { notices } => {
+            let target = Target::parse(sender.current_url())?;
             if !restricted(&target, &notices) {
                 return Err(Error::Unauthorized);
             }
-            create_reader(&sender, target, true, None).await
+            create_reader(
+                sender.tab_id.ok_or(Error::Unauthorized)?,
+                target.clone(),
+                target,
+                true,
+                None,
+                false,
+                !automatic,
+            )
+            .await
         }
         Request::OpenManual { input } => {
-            create_reader(&sender, Target::parse(&input)?, false, None).await
+            let target = Target::parse(&input)?;
+            let tab_id = new_tab().await.map_err(|_| Error::Unavailable)?;
+            create_reader(
+                tab_id,
+                target.clone(),
+                target.clone(),
+                false,
+                None,
+                true,
+                true,
+            )
+            .await?;
+            navigate_tab(tab_id, &target.canonical_url())
+                .await
+                .map_err(|_| Error::Unavailable)?;
+            Ok(json!({"opened":true}))
+        }
+        Request::Pending => {
+            let all: std::collections::HashMap<String, Session> =
+                decode(session_all().await.map_err(|_| Error::Storage)?)?;
+            for (key, mut session) in all {
+                if session.pending
+                    && session.valid(&session.target, now())
+                    && session.bound_to(&sender)
+                {
+                    session.pending = false;
+                    session_set(&key, js(&session))
+                        .await
+                        .map_err(|_| Error::Storage)?;
+                    let token = key.strip_prefix("reader:").ok_or(Error::Expired)?;
+                    return Ok(
+                        json!({"session":token,"target":session.target,"view":crate::view::loading(&session.target),"load":{"op":"read","session":token,"target":session.target}}),
+                    );
+                }
+            }
+            Ok(Value::Null)
         }
         Request::Current | Request::OpenCurrent => {
             let open = matches!(request, Request::OpenCurrent);
@@ -316,16 +385,17 @@ async fn handle(request: Request, sender: Sender) -> Result<Value, Error> {
                 Ok(target) => {
                     let is_restricted = restricted(&target, &c.notices);
                     if open {
-                        create_reader(
-                            &Sender {
-                                tab_id: Some(c.tab_id),
-                                ..sender
-                            },
+                        let context = create_reader(
+                            c.tab_id,
+                            target.clone(),
                             target,
                             is_restricted,
                             None,
+                            false,
+                            true,
                         )
-                        .await
+                        .await?;
+                        deliver(c.tab_id, context).await
                     } else {
                         Ok(json!({"target":target,"restricted":is_restricted}))
                     }
@@ -340,11 +410,11 @@ async fn handle(request: Request, sender: Sender) -> Result<Value, Error> {
             }
         }
         Request::Read { session, target } => {
-            let mut s = load_session(&session, Some(&target)).await?;
+            let mut s = load_session(&session, Some(&target), &sender).await?;
             match &target {
                 Target::Post { .. } => {
                     let post = get_post(&target).await?;
-                    let record_error = if s.restricted {
+                    let record_error = if s.restricted && s.deliberate {
                         limitless_storage::record(Some(("post", &post.id)), None, false)
                             .await
                             .err()
@@ -352,13 +422,25 @@ async fn handle(request: Request, sender: Sender) -> Result<Value, Error> {
                     } else {
                         None
                     };
-                    Ok(json!({"post":post,"restricted":s.restricted,"record_error":record_error}))
+                    s.content = Some(crate::view::Content {
+                        post: Some(post),
+                        record_error,
+                        ..Default::default()
+                    });
+                    session_set(&session_key(&session)?, js(&s))
+                        .await
+                        .map_err(|_| Error::Storage)?;
+                    Ok(
+                        json!({"view":crate::view::reader(s.content.as_ref().unwrap(),&target,&session,s.restricted)}),
+                    )
                 }
                 Target::Profile { handle } => {
                     let profile = get_profile(&target).await;
                     let feed = timeline(&session, &mut s, None).await;
-                    if profile.is_err() && feed.is_err() {
-                        return Err(profile.unwrap_err());
+                    if let Err(error) = &profile
+                        && feed.is_err()
+                    {
+                        return Err(error.clone());
                     }
                     let profile_error = profile.as_ref().err().map(ToString::to_string);
                     let profile = profile.ok().or_else(|| {
@@ -369,7 +451,7 @@ async fn handle(request: Request, sender: Sender) -> Result<Value, Error> {
                             .find(|p| p.author.handle == *handle)
                             .map(|p| p.author.clone())
                     });
-                    let record_error = if s.restricted {
+                    let record_error = if s.restricted && s.deliberate {
                         if let Some(p) = profile.as_ref() {
                             limitless_storage::record(Some(("profile", &p.id)), None, false)
                                 .await
@@ -382,8 +464,19 @@ async fn handle(request: Request, sender: Sender) -> Result<Value, Error> {
                         None
                     };
                     let feed_error = feed.as_ref().err().map(ToString::to_string);
+                    s.content = Some(crate::view::Content {
+                        profile,
+                        timeline: feed.ok(),
+                        profile_error,
+                        timeline_error: feed_error,
+                        record_error,
+                        ..Default::default()
+                    });
+                    session_set(&session_key(&session)?, js(&s))
+                        .await
+                        .map_err(|_| Error::Storage)?;
                     Ok(
-                        json!({"profile":profile,"timeline":feed.ok(),"profile_error":profile_error,"timeline_error":feed_error,"restricted":s.restricted,"record_error":record_error}),
+                        json!({"view":crate::view::reader(s.content.as_ref().unwrap(),&target,&session,s.restricted)}),
                     )
                 }
             }
@@ -393,20 +486,46 @@ async fn handle(request: Request, sender: Sender) -> Result<Value, Error> {
             target,
             cursor,
         } => {
-            let mut s = load_session(&session, Some(&target)).await?;
-            Ok(json!(timeline(&session, &mut s, cursor.as_deref()).await?))
+            let mut s = load_session(&session, Some(&target), &sender).await?;
+            let next = timeline(&session, &mut s, cursor.as_deref()).await?;
+            let content = s.content.as_mut().ok_or(Error::Expired)?;
+            let feed = content.timeline.as_mut().ok_or(Error::InvalidTarget)?;
+            for post in next.posts {
+                if !feed.posts.iter().any(|p| p.id == post.id) {
+                    feed.posts.push(post);
+                }
+            }
+            feed.next_cursor = next
+                .next_cursor
+                .filter(|next| Some(next) != cursor.as_ref());
+            session_set(&session_key(&session)?, js(&s))
+                .await
+                .map_err(|_| Error::Storage)?;
+            Ok(
+                json!({"view":crate::view::reader(s.content.as_ref().unwrap(),&target,&session,s.restricted)}),
+            )
         }
         Request::OpenPost { session, id } => {
-            let s = load_session(&session, None).await?;
+            let s = load_session(&session, None, &sender).await?;
             if !limitless_core::valid_id(&id) || !s.allowed_posts.contains(&id) {
                 return Err(Error::Unauthorized);
             }
-            create_reader(&sender, Target::Post { id }, s.restricted, Some(s.expires)).await
+            create_reader(
+                s.tab_id,
+                Target::Post { id },
+                s.source,
+                s.restricted,
+                Some(s.expires),
+                false,
+                true,
+            )
+            .await
         }
     }
 }
 #[wasm_bindgen]
 pub async fn dispatch(message: JsValue, sender: JsValue) -> JsValue {
+    let raw_message: Value = decode(message.clone()).unwrap_or(Value::Null);
     let result = async {
         let sender: Sender = decode(sender).map_err(|_| Error::Unauthorized)?;
         let raw: Value = decode(message.clone())?;
@@ -423,6 +542,8 @@ pub async fn dispatch(message: JsValue, sender: JsValue) -> JsValue {
     .await;
     js(&match result {
         Ok(data) => json!({"ok":true,"data":data}),
-        Err(error) => json!({"ok":false,"message":error.to_string(),"error":error}),
+        Err(error) => {
+            json!({"ok":false,"message":error.to_string(),"view":crate::view::error(&error, matches!(raw_message["op"].as_str(),Some("read"|"timeline")).then_some(raw_message)),"error":error})
+        }
     })
 }

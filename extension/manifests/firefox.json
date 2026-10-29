@@ -25,10 +25,6 @@
       "128": "brand/icon-128.png"
     }
   },
-  "options_ui": {
-    "page": "options.html",
-    "open_in_tab": true
-  },
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; base-uri 'none'; connect-src 'self' https://api.fxtwitter.com; img-src 'self' https://pbs.twimg.com; media-src https://video.twimg.com; style-src 'self'; frame-src 'none'"
   },
@@ -64,6 +60,19 @@
         "styles/content.css"
       ],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "styles/app.css"
+      ],
+      "matches": [
+        "https://x.com/*",
+        "https://www.x.com/*",
+        "https://twitter.com/*",
+        "https://www.twitter.com/*"
+      ]
     }
   ]
 }

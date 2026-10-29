@@ -7,7 +7,7 @@ extern "C" {
     #[wasm_bindgen(js_namespace=limitlessUI,catch)]
     async fn send(message: JsValue) -> Result<JsValue, JsValue>;
     #[wasm_bindgen(js_namespace=limitlessUI)]
-    pub fn open_options();
+    pub fn asset_url(path: &str) -> String;
 }
 pub async fn call(message: Value) -> Result<Value, String> {
     let value = message
@@ -29,11 +29,11 @@ pub async fn call(message: Value) -> Result<Value, String> {
 }
 #[component]
 pub fn Header() -> impl IntoView {
-    view! {<header class="masthead"><a class="wordmark" href="popup.html"><img src="brand/mark.svg" alt=""/><h1>"LimitlessX"</h1></a><span class="edition">"PUBLIC READER"</span></header>}
+    view! {<header class="masthead"><div class="wordmark"><span class="brand-mark" aria-hidden="true" inner_html=include_str!("../../../extension/static/brand/mark.svg")></span><h1>"LimitlessX"</h1></div><span class="edition">"PUBLIC READER"</span></header>}
 }
 #[component]
 pub fn Footer() -> impl IntoView {
-    view! {<footer><button class="text-button" on:click=move |_|open_options()>"Settings"</button><a href="https://github.com/OnurByte/LimitlessX" target="_blank" rel="noopener noreferrer">"GitHub ↗"</a></footer>}
+    view! {<footer><span class="fine">"LimitlessX"</span><a href="https://github.com/OnurByte/LimitlessX" target="_blank" rel="noopener noreferrer">"GitHub ↗"</a></footer>}
 }
 #[component]
 pub fn Attribution() -> impl IntoView {
@@ -41,23 +41,19 @@ pub fn Attribution() -> impl IntoView {
 }
 #[wasm_bindgen(start)]
 pub fn start() {
-    let path = web_sys::window()
-        .and_then(|w| w.location().pathname().ok())
-        .unwrap_or_default();
-    let body = web_sys::window()
-        .unwrap()
-        .document()
-        .unwrap()
-        .body()
-        .unwrap();
-    if path.ends_with("reader.html") {
-        body.set_class_name("reader-page");
-        leptos::mount::mount_to_body(|| view! {<crate::reader::Reader/>});
-    } else if path.ends_with("options.html") {
-        body.set_class_name("options-page");
-        leptos::mount::mount_to_body(|| view! {<crate::options::Options/>});
-    } else {
-        body.set_class_name("popup-page");
+    let window = web_sys::window().unwrap();
+    if window
+        .location()
+        .protocol()
+        .ok()
+        .is_some_and(|p| p == "chrome-extension:" || p == "moz-extension:")
+    {
+        window
+            .document()
+            .unwrap()
+            .body()
+            .unwrap()
+            .set_class_name("popup-page");
         leptos::mount::mount_to_body(|| view! {<crate::popup::Popup/>});
     }
 }

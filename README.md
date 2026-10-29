@@ -6,6 +6,10 @@ A Rust-powered browser extension for viewing public X content through FxTwitter,
 
 **Development version. Not yet released in browser stores.** Availability is not guaranteed. The live provider returns some historically withheld public content, but has inconsistent profile responses; current regional-notice verification and the full release audit are still in progress.
 
+Restricted content appears automatically inside X and follows its native timeline styling.
+
+The current interface direction is [direct X injection with a popup only](docs/implementation-direction.md).
+
 ## Build
 
 Install rustup; the project pins Rust 1.99.1 and the WASM target in `rust-toolchain.toml`. Install matching tools:
@@ -22,9 +26,9 @@ If tools are not on PATH, set `WASM_BINDGEN` and `WASM_OPT` to their executable 
 
 ## Use
 
-Load `dist/chromium` as an unpacked extension, or temporarily load `dist/firefox/manifest.json` through Firefox's about:debugging. Open a public X profile/post from the popup, or use the LimitlessX action on a supported regional-withholding notice. Requests start only after activation. The reader opens in a packaged extension tab.
+Load `dist/chromium` as an unpacked extension, or temporarily load `dist/firefox/manifest.json` through Firefox's about:debugging. Open a public X profile/post from the popup, or use the LimitlessX action on a supported regional-withholding notice. A confirmed regional-withholding notice automatically starts the public-data lookup. Generic failures do not. Public content is injected directly into the X page. There is no extension reader page or iframe. Manual input opens the corresponding X URL and renders there.
 
-Manual lookups do not add to The Record. Eligible restricted profiles count once after a successful deliberate open. Fetched timeline posts count only when individually opened. Settings can disable recording or clear the local ledger.
+Automatic displays and manual lookups do not add to The Record. Eligible restricted profiles count once after a successful deliberate open. Fetched timeline posts count only when individually opened. Settings inside the popup can disable recording or clear the local ledger.
 
 ## Project
 

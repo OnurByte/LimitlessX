@@ -1,3 +1,4 @@
+mod package;
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -73,6 +74,7 @@ fn build(browser: &str) -> Result<(), String> {
                 .arg(&wasm),
         )?;
     }
+    package::validate(&out)?;
     println!("Built {}", out.display());
     Ok(())
 }
@@ -88,8 +90,13 @@ fn main() -> ExitCode {
     let args: Vec<_> = env::args().skip(1).collect();
     let result = match args.first().map(String::as_str) {
         Some("build") => build(args.get(1).map(String::as_str).unwrap_or("")),
+        Some("package") => (|| {
+            build("chromium")?;
+            build("firefox")?;
+            package::release()
+        })(),
         Some("test") => run(Command::new("cargo").args(["test", "--workspace", "--locked"])),
-        _ => Err("Usage: cargo xtask build <chromium|firefox> | test".into()),
+        _ => Err("Usage: cargo xtask build <chromium|firefox> | test | package".into()),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,

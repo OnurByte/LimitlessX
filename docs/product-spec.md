@@ -1,3 +1,5 @@
+> Historical attachment. The user’s later instructions in [implementation-direction.md](implementation-direction.md) supersede its reader-page, activation, logo and standalone-page assumptions.
+
 "
 # LimitlessX
 **Brand Identity, Product Specification & Rust Engineering Plan**

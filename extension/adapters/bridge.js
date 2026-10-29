@@ -6,7 +6,9 @@ globalThis.limitlessBridge = {
   session_set: async (key, value) => api.storage.session.set({ [key]: value }),
   session_remove: async keys => api.storage.session.remove(keys),
   session_all: async () => api.storage.session.get(null),
-  open_tab: async url => { await api.tabs.create({ url }); },
+  new_tab: async () => (await api.tabs.create({ url: 'about:blank' })).id,
+  navigate_tab: async (tabId, url) => { await api.tabs.update(tabId, { url }); },
+  show_in_tab: (tabId, context) => api.tabs.sendMessage(tabId, { op: 'show_inline', context }),
   active_context: async () => {
     const [tab] = await api.tabs.query({ active: true, currentWindow: true });
     if (!tab) return null;

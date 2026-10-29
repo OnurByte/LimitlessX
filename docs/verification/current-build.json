@@ -1,0 +1,51 @@
+{
+  "verified_at": "2026-10-29T21:43:55.053547+00:00",
+  "native_tests": {
+    "passed": 17,
+    "failed": 0
+  },
+  "clippy": {
+    "native": "passed",
+    "wasm": "passed"
+  },
+  "browser_checks": {
+    "chromium": [
+      "packaged worker/popup smoke",
+      "automatic restricted-content injection",
+      "generic failure ignored",
+      "single request per notice",
+      "native post typography and borders",
+      "dim theme update without refetch",
+      "popup-only HTML",
+      "popup settings",
+      "manual profile injection and pagination",
+      "text-node XSS protection",
+      "post activation in the same container",
+      "tab/source binding",
+      "deduplication",
+      "worker restart",
+      "session expiry before fetch",
+      "SPA route cleanup",
+      "refreshed reused notice",
+      "rate-limit cooldown",
+      "malformed response",
+      "browser restart"
+    ],
+    "firefox": [
+      "packaged event-page/popup smoke",
+      "automatic inline rendering under strict page CSP",
+      "no extension reader page",
+      "automatic views remain uncounted",
+      "popup settings"
+    ]
+  },
+  "transport_limits": {
+    "chromium": "Controlled provider and X DOM fixtures; real packaged Rust/WASM and IndexedDB.",
+    "firefox": "Controlled X DOM; public live FxTwitter status/20 (event-page Fetch is not intercepted by Firefox BiDi)."
+  },
+  "wasm_bytes": {
+    "limitless_runtime_bg.wasm": 603817,
+    "limitless_ui_bg.wasm": 254036
+  },
+  "release_status": "Development packages; real regional-notice/provider feasibility and store release gates remain open."
+}

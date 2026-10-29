@@ -66,17 +66,17 @@ pub async fn record(
         meta.since = js_sys::Date::now();
     }
     err(meta_store.put(&val(&meta)?, Some(&key)).await)?;
-    if meta.enabled {
-        if let Some((kind, id)) = kind {
-            let store = match kind {
-                "profile" => &profiles,
-                "post" => &posts,
-                _ => return Err(Error::Storage),
-            };
-            let key = JsValue::from_str(&record_key(&meta.salt, kind, id));
-            // put is idempotent under the store's unique primary key, in the same transaction as settings.
-            err(store.put(&JsValue::TRUE, Some(&key)).await)?;
-        }
+    if meta.enabled
+        && let Some((kind, id)) = kind
+    {
+        let store = match kind {
+            "profile" => &profiles,
+            "post" => &posts,
+            _ => return Err(Error::Storage),
+        };
+        let key = JsValue::from_str(&record_key(&meta.salt, kind, id));
+        // put is idempotent under the store's unique primary key, in the same transaction as settings.
+        err(store.put(&JsValue::TRUE, Some(&key)).await)?;
     }
     let result = Record {
         profiles: err(profiles.count(None).await)?,

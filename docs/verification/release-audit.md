@@ -1,19 +1,19 @@
-# Release audit — development in progress
+# Release audit — development build
 
-A green native test run is not a release decision. Each gate below needs its own evidence.
+The current behavior is defined by [the user's revised direction](../implementation-direction.md). The attached original spec is historical where it conflicts.
 
-| Specification requirement | Evidence so far | Remaining |
+| Requirement | Current evidence | Remaining |
 |---|---|---|
-| P0 FxTwitter withheld capability | Live historically withheld timeline returns 20 posts and pagination; provenance in feasibility.json | Current X notice against real representative accounts/posts, reliable protected/suspended/deleted comparisons |
-| P1 Rust/WASM runtime | Real packaged Leptos popup and background ping passed Chromium and Firefox | Full messaging lifecycle/restart tests |
-| P2 original brand | SVG master and 16/32/48/128 PNG assets, brand.md | Visual QA of all sizes/themes |
-| P3 restriction detection | Native notice/target tests and bounded DOM adapter | Real X notice and navigation/false-positive browser tests |
-| P4 profile reader | Typed profile/timeline adapter and Leptos reader | Browser error, pagination and profile identity tests |
-| P5 posts and media | Typed post adapter; text escaping and media host allowlist | Actual browser image/video/error tests |
-| P6 popup and Record | Leptos pages and Rust IndexedDB transactions | Real concurrent, restart, disable/reset tests |
-| P7 security/performance | Sender/expiry tests; credential omission, streaming limits, packaged code | Network evidence, malicious-message tests, measured startup/idle baseline |
-| P8 cross-browser compatibility | MV3 runtime smoke on full Chromium and Firefox | Full flow on both; individual variants labeled untested |
-| P9 landing/store | Repo README, privacy and compatibility docs | Landing page, source archives, store listings and submission |
-| P10 public v1 | No public claim | All release gates and actual store publication |
+| Direct X DOM injection; popup only | Chromium automatic inline test and Firefox live-provider inline test; package validator rejects reader/options pages | Real X layouts/notices across supported languages |
+| Automatic regional detection | Rust notice rules; generic suspended error ignored; one lookup for an unchanged notice; route refresh integration contracts | Current representative real regional account/post notices |
+| X-style presentation | Native post/profile typography, avatar column, timeline borders and page theme; actual rendered screenshots; theme change test | Broader real-X visual comparison and unusual media layouts |
+| User-provided logo | Six-stripe SVG master, retained reference image, 16/32/48/128 PNG derivatives | None for local assets |
+| Rust-first app | Domain/provider/runtime/storage in Rust; Leptos popup; Rust inline DOM view and generic browser adapter | Independent store source review |
+| Provider capability | Live historically withheld account timeline returned 20 posts with pagination; normal status/20 verified | Profile endpoint inconsistency, present X restriction verification, reliable private/suspended/deleted live examples |
+| Local Record | Atomic IndexedDB, salted unique keys, disable/reset, automatic-vs-deliberate eligibility, dedup and restart tests | Broader concurrent reset stress tests |
+| Security | Exact source/tab sessions, expiry before fetch, escaped DOM text, narrow permissions, credential omission, host CSP preserved, private executable resources | Complete threat review and network/media audit |
+| Cross-browser builds | MV3 Chromium worker and Firefox event-page smoke, automatic inline rendering in both | Individually untested browser variants remain labeled untested |
+| Packaging | cargo xtask build chromium/firefox, test and package; deterministic zip test; source archive and CI workflow | CI result after pushing; signing/store submission |
+| Public v1.0 | Not declared | All remaining gates, actual browser-store publication |
 
-No store URLs or install counts are invented. Publishing signed store packages requires store account access and provider feasibility evidence; these remain external release gates.
+No store availability badges, store URLs, universal access claims or variant compatibility claims are invented. A standalone landing page and extension reader/options pages are excluded by the user's revised instruction.

@@ -14,6 +14,7 @@ pub fn Popup() -> impl IntoView {
     let input = RwSignal::new(String::new());
     let error = RwSignal::new(None::<String>);
     let busy = RwSignal::new(false);
+    let settings = RwSignal::new(false);
     leptos::task::spawn_local(async move {
         if let Ok(v) = call(json!({"op":"current"})).await {
             current.set(serde_json::from_value(v).ok());
@@ -40,9 +41,12 @@ pub fn Popup() -> impl IntoView {
         <form class="lookup" on:submit=move |ev|{ev.prevent_default();open(false);}>
             <label for="target-input">{move ||if current.get().is_some(){"Or open another profile or post"}else{"X profile or post"}}</label>
             <input id="target-input" type="text" placeholder="@handle or https://x.com/…" autocomplete="off" spellcheck="false" maxlength="2048" prop:value=move ||input.get() on:input=move |ev|input.set(event_target_value(&ev))/>
-            <button class="primary" disabled=move ||busy.get() || input.get().trim().is_empty()>{move ||if busy.get(){"Opening…"}else{"Open public reader"}}<span aria-hidden="true">"↗"</span></button>
+            <button class="primary" disabled=move ||busy.get() || input.get().trim().is_empty()>{move ||if busy.get(){"Opening…"}else{"View on X"}}<span aria-hidden="true">"↗"</span></button>
         </form>
         {move ||error.get().map(|e|view!{<p class="error" role="alert">{e}</p>})}
-        <p class="fine disclosure">"When you open content, its identifier is sent to FxTwitter. Private content is unavailable."</p><crate::record::RecordPanel/><Attribution/><Footer/>
+        <p class="fine disclosure">"Detected restricted content is looked up automatically through FxTwitter. Private content is unavailable."</p><crate::record::RecordPanel controls=settings/>
+        <button class="text-button settings-toggle" aria-expanded=move ||settings.get() on:click=move |_|settings.update(|value|*value = !*value)>"Settings"</button>
+        {move ||settings.get().then(||view!{<section class="popup-settings"><div class="prose"><h2>"Your data"</h2><p>"The Record is stored on this device. Only deliberately opened restricted content counts. Automatic displays and manual lookups do not count."</p><p>"FxTwitter receives requested content identifiers and your network address. X media hosts receive connections when media loads. Requests omit credentials. No analytics or X session cookies are used."</p><p>"Unavailable, protected, suspended and deleted content are separate states. Access is not guaranteed."</p></div></section>})}
+        <Attribution/><Footer/>
     </main>}
 }

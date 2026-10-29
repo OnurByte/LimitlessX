@@ -1,6 +1,6 @@
 # LimitlessX brand
 
-The monochrome mark combines two interrupted loop ends with a continuous X intersection. The SVG master is `extension/static/brand/mark.svg`; square raster icons derive from this geometry for browser packaging. Use black on white or white on black. No glow, animation, shield or lock.
+The mark traces the user's attached reference: six ascending slanted black bands, with wedge-shaped first and last bands. The source reference is `docs/brand/user-reference.png`; the clean SVG master is `extension/static/brand/mark.svg`. No bitmap is embedded in the SVG. Browser icons are derived by `scripts/render-icons.py` at 16, 32, 48 and 128 pixels. Use black on white or white on black.
 
 Typography: Helvetica Neue, Helvetica, Arial, sans-serif. Use 4px spacing increments, 8px control radii, 12px panel radii, high-contrast primary text and neutral secondary text. Follow the system color scheme.
 

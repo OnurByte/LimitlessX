@@ -2,7 +2,7 @@ import init from '../pkg/ui/limitless_ui.js';
 const api = globalThis.browser ?? chrome;
 globalThis.limitlessUI = {
   send: message => api.runtime.sendMessage(message),
-  open_options: () => api.runtime.openOptionsPage(),
+  asset_url: path => api.runtime.getURL(path),
 };
 try { await init(); }
 catch {
