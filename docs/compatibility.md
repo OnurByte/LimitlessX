@@ -4,6 +4,7 @@
 |---|---|---|
 | Chromium (Playwright full browser) | tests/browser/smoke.py: real MV3 worker/WASM response and Leptos popup | Automatic inline integration passed; see current-build.json |
 | Firefox (Playwright Firefox binary through geckodriver) | tests/browser/firefox_smoke.py: installed MV3 package, event-page WASM response and Leptos popup | Automatic inline integration passed using live public status/20 |
+| Helium | User-authorized DevTools MCP; installed enabled extension; actual regional profile replacement and public post with 34 replies | Verified locally on 2026-10-30 |
 | Chrome, Brave, Opera, Edge, Vivaldi | Same Chromium package intended | Not individually verified |
 | Zen, Floorp, LibreWolf, Waterfox | Same Firefox package intended | Not individually verified |
 

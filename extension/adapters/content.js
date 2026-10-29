@@ -3,7 +3,7 @@
   const api = globalThis.browser ?? chrome;
   const send = message => api.runtime.sendMessage({ ...message, page_url: location.href });
   let timer, generation = 0, lastUrl = location.href;
-  let styleReady, themeSheet, themeSignature, host, root, mountedUrl, revision = 0, suppressedRoute, inspectedKey, booting = true;
+  let styleReady, themeSheet, themeSignature, host, root, mountedUrl, revision = 0, suppressedRoute, inspectedKey, booting = true, cachedPresentation;
   const hiddenNotices = new Map();
   const restoreNotices = () => {
     for (const [node, original] of hiddenNotices) {
@@ -17,7 +17,7 @@
   };
   // Generic DOM transport: Rust supplies the complete view and each action.
   const tags = new Set(['main','header','div','section','article','p','h1','h2','strong','span','time','img','video','a','button','svg','path','br']);
-  const attributes = new Set(['class','href','src','alt','loading','crossorigin','referrerpolicy','poster','controls','preload','type','role','target','rel','viewBox','fill','d','aria-label']);
+  const attributes = new Set(['class','href','src','alt','loading','crossorigin','referrerpolicy','poster','controls','preload','type','role','target','rel','viewBox','fill','d','aria-label','aria-hidden','tabindex','title','datetime']);
   const element = description => {
     if (typeof description === 'string') return document.createTextNode(description);
     if (!description || !tags.has(description.tag)) throw new Error('Unsupported DOM element');
@@ -30,15 +30,17 @@
       node.setAttribute(name, value);
     }
     for (const child of description.children ?? []) node.append(element(child));
-    if (description.action) node.addEventListener('click', event => {
-      if (!event.isTrusted) return;
-      node.disabled = true; run(description.action);
-    });
+    if (node.tagName === 'A') node.addEventListener('click', event => event.stopPropagation());
+    if (description.action) {
+      const activate = event => { if (!event.isTrusted) return; event.stopPropagation(); node.disabled = true; run(description.action); };
+      node.addEventListener('click', activate);
+      node.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); activate(event); } });
+    }
     return node;
   };
   const apply = async data => {
     if (!data) return;
-    if (data.view && root) root.replaceChildren(element(data.view));
+    if (data.view && root) { cachedPresentation = data; root.replaceChildren(element(data.view)); }
     else if (data.message && root) {
       root.replaceChildren(document.createTextNode(data.message));
       const retry = document.createElement('button'); retry.type = 'button'; retry.textContent = 'Try again';
@@ -84,7 +86,16 @@
       root = document.createElement('div'); root.className = 'inline-root'; shadow.append(root);
       (document.querySelector('[data-testid="primaryColumn"]') ?? document.querySelector('main') ?? document.body).append(host);
       mountedUrl = sourceUrl;
-      for (const node of roots()) { hiddenNotices.set(node, { hidden: node.hidden, classed: node.classList.contains('limitlessx-notice-hidden') }); node.classList.add('limitlessx-notice-hidden'); node.hidden = true; }
+      const primary = document.querySelector('[data-testid="primaryColumn"]');
+      const regions = new Set(roots().map(notice => {
+        let region = notice;
+        for (let ancestor = notice.parentElement; ancestor && ancestor !== primary; ancestor = ancestor.parentElement) {
+          if (ancestor.querySelector('[data-testid="UserName"]') && !ancestor.querySelector('h2[role="heading"]')) region = ancestor;
+        }
+        return region;
+      }));
+      for (const timeline of primary?.querySelectorAll('[aria-label^="Timeline:"]') ?? []) regions.add(timeline);
+      for (const node of regions) { hiddenNotices.set(node, { hidden: node.hidden, classed: node.classList.contains('limitlessx-notice-hidden') }); node.classList.add('limitlessx-notice-hidden'); node.hidden = true; }
       themeSheet = new CSSStyleSheet(); syncTheme();
       shadow.adoptedStyleSheets = [sheet, themeSheet];
       await apply(context);
@@ -99,9 +110,11 @@
     const nodes = roots();
     if (location.href !== lastUrl) {
       for (const [node, text] of previousNodes) if (!staleNodes.has(node)) staleNodes.set(node, { text, url: lastUrl });
-      clearInline(); suppressedRoute = undefined; inspectedKey = undefined; lastUrl = location.href; ++generation;
+      clearInline(); cachedPresentation = undefined; suppressedRoute = undefined; inspectedKey = undefined; lastUrl = location.href; ++generation; recoverPending();
     }
-    if (mountedUrl && (!host?.isConnected || mountedUrl !== location.href)) clearInline();
+    if (mountedUrl && !host?.isConnected && mountedUrl === location.href && cachedPresentation) {
+      const cached = cachedPresentation; clearInline(); present(cached);
+    } else if (mountedUrl && mountedUrl !== location.href) clearInline();
     previousNodes = new Map(nodes.map(node => [node, signature(node)]));
     return {
       url: location.href,
@@ -143,7 +156,13 @@
       suppressedRoute = location.href; present(message.context).then(respond); return true;
     }
   });
-  send({ op: 'pending' }).then(response => {
-    if (response?.ok && response.data) { suppressedRoute = location.href; return present(response.data); }
-  }).catch(() => {}).finally(() => { booting = false; schedule(); });
+  const recoverPending = () => {
+    const url = location.href, attempt = generation;
+    return send({ op: 'pending' }).then(response => {
+      if (url === location.href && attempt === generation && response?.ok && response.data) {
+        suppressedRoute = url; return present(response.data);
+      }
+    }).catch(() => {});
+  };
+  recoverPending().finally(() => { booting = false; schedule(); });
 })();

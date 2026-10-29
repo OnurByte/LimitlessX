@@ -7,7 +7,7 @@ with sync_playwright() as p,tempfile.TemporaryDirectory(prefix='limitlessx-auto-
  ext=ROOT/'dist/chromium'
  with p.chromium.launch_persistent_context(profile,channel='chromium',headless=True,args=[f'--disable-extensions-except={ext}',f'--load-extension={ext}','--no-sandbox']) as ctx:
   calls=[]
-  def provider(route):calls.append(route.request.url);route.fulfill(json={'code':200,'status':POST})
+  def provider(route):calls.append(route.request.url);route.fulfill(json={'code':200,'status':POST,'thread':None,'replies':[],'cursor':{'bottom':None}})
   ctx.route('https://api.fxtwitter.com/**',provider)
   ctx.route('https://x.com/**',lambda route:route.fulfill(body=html('Account suspended'),content_type='text/html',headers={'Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self'; img-src https://pbs.twimg.com; connect-src 'self'"}))
   worker=ctx.service_workers[0] if ctx.service_workers else ctx.wait_for_event('serviceworker');origin='/'.join(worker.url.split('/')[:3]);ui=ctx.new_page();ui.goto(origin+'/popup.html');ui.get_by_role('heading',name='LimitlessX',exact=True).wait_for();send=lambda m:ui.evaluate('(m)=>chrome.runtime.sendMessage(m)',m)
@@ -20,7 +20,7 @@ with sync_playwright() as p,tempfile.TemporaryDirectory(prefix='limitlessx-auto-
   assert x.locator('#limitlessx-inline .post-text').inner_text()==POST['text']
   assert x.locator('[data-testid="emptyState"]').is_hidden(),'withheld notice was not replaced visually'
   assert x.locator('#limitlessx-inline .post-card').evaluate('(n)=>getComputedStyle(n).borderRadius')=='0px'
-  assert x.locator('#limitlessx-inline .post-text').evaluate('(n)=>getComputedStyle(n).fontSize')=='20px'
+  assert x.locator('#limitlessx-inline .post-text').evaluate('(n)=>getComputedStyle(n).fontSize')=='17px'
   x.wait_for_timeout(700);assert len(calls)==1,'automatic lookup repeated after its own DOM update'
   x.evaluate("document.body.style.backgroundColor='#15202b'");x.wait_for_timeout(400)
   assert x.locator('#limitlessx-inline .x-reader').evaluate('(n)=>getComputedStyle(n).backgroundColor')=='rgb(21, 32, 43)'

@@ -72,6 +72,23 @@ struct RawProfile {
     protected: bool,
     description: Option<String>,
     avatar_url: Option<String>,
+    banner_url: Option<String>,
+    location: Option<String>,
+    joined: Option<String>,
+    followers: Option<u64>,
+    following: Option<u64>,
+    website: Option<RawWebsite>,
+    verification: Option<RawVerification>,
+}
+#[derive(Deserialize)]
+struct RawWebsite {
+    url: String,
+}
+#[derive(Deserialize)]
+struct RawVerification {
+    verified: bool,
+    #[serde(rename = "type")]
+    kind: Option<String>,
 }
 impl RawProfile {
     fn normalize(self) -> Result<Profile, Error> {
@@ -85,13 +102,28 @@ impl RawProfile {
         {
             return Err(Error::InvalidResponse);
         }
-        let handle = valid_handle(&self.screen_name).ok_or(Error::InvalidResponse)?;
+        valid_handle(&self.screen_name).ok_or(Error::InvalidResponse)?;
+        let handle = self.screen_name;
         Ok(Profile {
             id: self.id,
             handle,
             name: self.name,
             biography: self.description,
             avatar: self.avatar_url.and_then(|u| safe_media_url(&u)),
+            banner: self.banner_url.and_then(|u| safe_media_url(&u)),
+            location: self.location.filter(|v| !v.is_empty()),
+            joined: self.joined,
+            followers: self.followers,
+            following: self.following,
+            website: self
+                .website
+                .and_then(|w| url::Url::parse(&w.url).ok())
+                .filter(|u| {
+                    u.scheme() == "https" && u.username().is_empty() && u.password().is_none()
+                })
+                .map(Into::into),
+            verified: self.verification.as_ref().map(|v| v.verified),
+            verification_type: self.verification.and_then(|v| v.kind),
         })
     }
 }
@@ -112,16 +144,26 @@ pub fn parse_profile(http: u16, body: &str, expected_handle: &str) -> Result<Pro
 #[serde(tag = "type")]
 enum RawPost {
     #[serde(rename = "status")]
-    Status {
-        provider: String,
-        id: String,
-        text: String,
-        author: Box<RawProfile>,
-        created_at: Option<String>,
-        media: Option<RawMedia>,
-    },
+    Status(Box<RawStatus>),
     #[serde(rename = "tombstone")]
     Tombstone { reason: String },
+}
+#[derive(Deserialize)]
+struct RawStatus {
+    provider: String,
+    id: String,
+    text: String,
+    author: Box<RawProfile>,
+    created_at: Option<String>,
+    media: Option<RawMedia>,
+    #[serde(flatten)]
+    metrics: limitless_core::Metrics,
+    quote: Option<Box<RawPost>>,
+    replying_to: Option<RawReply>,
+}
+#[derive(Deserialize)]
+struct RawReply {
+    screen_name: Option<String>,
 }
 #[derive(Deserialize, Default)]
 struct RawMedia {
@@ -139,16 +181,26 @@ struct RawAttachment {
 }
 impl RawPost {
     fn normalize(self) -> Result<Post, Error> {
+        self.normalize_depth(0)
+    }
+    fn normalize_depth(self, depth: u8) -> Result<Post, Error> {
+        if depth > 6 {
+            return Err(Error::InvalidResponse);
+        }
         match self {
             Self::Tombstone { reason } => Err(error_reason(&reason)),
-            Self::Status {
-                provider,
-                id,
-                text,
-                author,
-                created_at,
-                media,
-            } => {
+            Self::Status(raw) => {
+                let RawStatus {
+                    provider,
+                    id,
+                    text,
+                    author,
+                    created_at,
+                    media,
+                    metrics,
+                    quote,
+                    replying_to,
+                } = *raw;
                 if provider != "twitter"
                     || !valid_id(&id)
                     || text.len() > 256 * 1024
@@ -183,6 +235,13 @@ impl RawPost {
                     author: author.normalize()?,
                     published: created_at,
                     media,
+                    metrics,
+                    quote: quote
+                        .and_then(|q| q.normalize_depth(depth + 1).ok())
+                        .map(Box::new),
+                    replying_to: replying_to
+                        .and_then(|r| r.screen_name)
+                        .filter(|h| valid_handle(h).is_some()),
                 })
             }
         }
@@ -226,4 +285,70 @@ pub fn parse_timeline(http: u16, body: &str) -> Result<Timeline, Error> {
         return Err(Error::InvalidResponse);
     }
     Ok(Timeline { posts, next_cursor })
+}
+
+#[derive(Deserialize)]
+struct ConversationResponse {
+    status: RawPost,
+    thread: Option<Vec<RawPost>>,
+    replies: Vec<RawPost>,
+    cursor: Option<Cursor>,
+}
+pub fn parse_conversation(
+    http: u16,
+    body: &str,
+    expected: &str,
+) -> Result<limitless_core::Conversation, Error> {
+    check(http, body)?;
+    let r: ConversationResponse = serde_json::from_str(body).map_err(|_| Error::InvalidResponse)?;
+    let post = r.status.normalize()?;
+    if post.id != expected {
+        return Err(Error::InvalidResponse);
+    }
+    if r.replies.len() > 200 || r.thread.as_ref().is_some_and(|t| t.len() > 200) {
+        return Err(Error::InvalidResponse);
+    }
+    let mut unavailable = 0;
+    let mut normalize = |values: Vec<RawPost>| -> Result<Vec<Post>, Error> {
+        values
+            .into_iter()
+            .filter_map(|raw| match raw {
+                RawPost::Tombstone { .. } => {
+                    unavailable += 1;
+                    None
+                }
+                post => Some(post.normalize()),
+            })
+            .collect()
+    };
+    let thread = normalize(r.thread.unwrap_or_default())?
+        .into_iter()
+        .filter(|p| p.id != expected)
+        .collect();
+    let replies = normalize(r.replies)?;
+    let next_cursor = r.cursor.and_then(|c| c.bottom).filter(|c| !c.is_empty());
+    if next_cursor.as_ref().is_some_and(|c| c.len() > 4096) {
+        return Err(Error::InvalidResponse);
+    }
+    Ok(limitless_core::Conversation {
+        post,
+        thread,
+        replies,
+        next_cursor,
+        unavailable_replies: unavailable,
+    })
+}
+pub fn conversation_endpoint(id: &str, cursor: Option<&str>) -> Result<String, Error> {
+    if !valid_id(id) {
+        return Err(Error::InvalidTarget);
+    }
+    let mut url =
+        url::Url::parse(&format!("https://api.fxtwitter.com/2/conversation/{id}")).unwrap();
+    if let Some(cursor) = cursor {
+        if cursor.len() > 4096 {
+            return Err(Error::InvalidResponse);
+        }
+        url.query_pairs_mut().append_pair("cursor", cursor);
+    }
+    Ok(url.into())
 }

@@ -143,6 +143,10 @@ impl Restriction {
             .collect::<Vec<_>>()
             .join(" ")
             .to_lowercase();
+        let t = t
+            .strip_prefix("account withheld")
+            .unwrap_or(&t)
+            .trim_start();
         let phrase = match target {
             Target::Profile { handle } => {
                 let prefix = format!("@{handle}'s account has been withheld in ");
@@ -196,13 +200,29 @@ pub enum Error {
     Storage,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Profile {
     pub id: String,
     pub handle: String,
     pub name: String,
     pub biography: Option<String>,
     pub avatar: Option<String>,
+    #[serde(default)]
+    pub banner: Option<String>,
+    #[serde(default)]
+    pub location: Option<String>,
+    #[serde(default)]
+    pub website: Option<String>,
+    #[serde(default)]
+    pub joined: Option<String>,
+    #[serde(default)]
+    pub followers: Option<u64>,
+    #[serde(default)]
+    pub following: Option<u64>,
+    #[serde(default)]
+    pub verified: Option<bool>,
+    #[serde(default)]
+    pub verification_type: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Media {
@@ -211,13 +231,36 @@ pub struct Media {
     pub preview: Option<String>,
     pub alt: Option<String>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Post {
     pub id: String,
     pub text: String,
     pub author: Profile,
     pub published: Option<String>,
     pub media: Vec<Media>,
+    #[serde(default)]
+    pub metrics: Metrics,
+    #[serde(default)]
+    pub quote: Option<Box<Post>>,
+    #[serde(default)]
+    pub replying_to: Option<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Metrics {
+    pub replies: Option<u64>,
+    pub reposts: Option<u64>,
+    pub likes: Option<u64>,
+    pub views: Option<u64>,
+    pub bookmarks: Option<u64>,
+    pub quotes: Option<u64>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Conversation {
+    pub post: Post,
+    pub thread: Vec<Post>,
+    pub replies: Vec<Post>,
+    pub next_cursor: Option<String>,
+    pub unavailable_replies: usize,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Timeline {

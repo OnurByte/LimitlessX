@@ -22,8 +22,8 @@ with sync_playwright() as p,tempfile.TemporaryDirectory(prefix='limitlessx-inlin
    elif '/profile/' in url:route.fulfill(json={'code':200,'user':USER})
    else:
     post=copy.deepcopy(POST)
-    if '/status/21' in url:post['id']='21';post['text']='new route post'
-    route.fulfill(json={'code':200,'status':post})
+    if '/status/21' in url or '/conversation/21' in url:post['id']='21';post['text']='new route post'
+    route.fulfill(json={'code':200,'status':post,'thread':None,'replies':[],'cursor':{'bottom':None}})
   ctx.route('https://api.fxtwitter.com/**',provider)
   ctx.route('https://x.com/**',lambda r:r.fulfill(body=html(),content_type='text/html',headers={'Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self'; img-src https://pbs.twimg.com; connect-src 'self'"}))
   send({'op':'clear'})
@@ -44,7 +44,7 @@ with sync_playwright() as p,tempfile.TemporaryDirectory(prefix='limitlessx-inlin
   isolated=content_sender(x)
   sessions=ui.evaluate('chrome.storage.session.get(null)');token=next(k[7:] for k,v in sessions.items() if v['source']=={'kind':'profile','handle':'jack'})
   assert not isolated({'op':'open_post','session':token,'id':'999'})['ok']
-  x.get_by_role('button',name='Open post').first.click();x.locator('#limitlessx-inline .post-text').wait_for();assert x.locator('#limitlessx-inline .post-card').count()==1
+  x.locator('#limitlessx-inline .post-text').first.click();x.locator('#limitlessx-inline .post-text').wait_for();assert x.locator('#limitlessx-inline .post-card').count()==1
   assert len(ctx.pages)==3,'opening a timeline post created another tab'
   assert x.url=='https://x.com/jack';assert send({'op':'record'})['data']['posts']==0
   report['same_container_post_open']='passed'

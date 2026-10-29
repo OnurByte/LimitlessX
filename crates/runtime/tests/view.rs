@@ -18,6 +18,7 @@ fn provider_text_stays_a_text_node_and_sessions_never_become_dom_attributes() {
             name: payload.into(),
             biography: Some(payload.into()),
             avatar: None,
+            ..Default::default()
         }),
         timeline: Some(Timeline {
             posts: vec![],

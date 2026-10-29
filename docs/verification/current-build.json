@@ -1,7 +1,7 @@
 {
-  "verified_at": "2026-10-29T21:43:55.053547+00:00",
+  "verified_at": "2026-10-29T22:38:36.325678+00:00",
   "native_tests": {
-    "passed": 17,
+    "passed": 21,
     "failed": 0
   },
   "clippy": {
@@ -29,7 +29,13 @@
       "refreshed reused notice",
       "rate-limit cooldown",
       "malformed response",
-      "browser restart"
+      "browser restart",
+      "actual Helium notice heading regression",
+      "profile metadata and real v2 conversation normalization",
+      "17/24 main post and 15/20 reply typography",
+      "40px avatar and 8px gap",
+      "reply pagination and deliberate view accounting",
+      "DOM removal recovery and equivalent post URL redirect"
     ],
     "firefox": [
       "packaged event-page/popup smoke",
@@ -37,15 +43,23 @@
       "no extension reader page",
       "automatic views remain uncounted",
       "popup settings"
-    ]
+    ],
+    "helium": {
+      "installed": true,
+      "enabled": true,
+      "extension_id": "lbeeopacdoaccgmepkfhilamcdnhibii",
+      "regional_profile": "Actual x.com/ekrem_imamoglu regional notice automatically replaced with public profile. Latest timeline lookup returned not-found; earlier lookup returned posts.",
+      "conversation": "Actual public post 2115761952937128381 rendered with 34 provider replies; native main text 17/24, replies 15/20, avatars 40px and 8px gap.",
+      "inspection": "User-authorized Chrome DevTools MCP connected to existing Helium profile; no browser restart."
+    }
   },
   "transport_limits": {
     "chromium": "Controlled provider and X DOM fixtures; real packaged Rust/WASM and IndexedDB.",
     "firefox": "Controlled X DOM; public live FxTwitter status/20 (event-page Fetch is not intercepted by Firefox BiDi)."
   },
   "wasm_bytes": {
-    "limitless_runtime_bg.wasm": 603817,
+    "limitless_runtime_bg.wasm": 681179,
     "limitless_ui_bg.wasm": 254036
   },
-  "release_status": "Development packages; real regional-notice/provider feasibility and store release gates remain open."
+  "release_status": "Installed Helium development build. A representative current real regional profile notice verified; provider availability remains inconsistent. Store/signing and broader release gates remain open."
 }

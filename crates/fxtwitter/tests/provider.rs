@@ -84,3 +84,57 @@ fn preserves_pagination_and_does_not_invent_empty_arrays() {
         .ends_with("?cursor=next%2B%2F%3D")
     );
 }
+
+#[test]
+fn normalizes_real_profile_metadata_and_post_metrics_without_inventing_nulls() {
+    let mut user: serde_json::Value = serde_json::from_str(USER).unwrap();
+    user["user"]["banner_url"] = serde_json::json!("https://pbs.twimg.com/profile_banners/12/1");
+    user["user"]["followers"] = serde_json::json!(9876543);
+    user["user"]["following"] = serde_json::json!(820);
+    user["user"]["location"] = serde_json::json!("İstanbul");
+    user["user"]["joined"] = serde_json::json!("Sun Nov 27 19:45:16 +0000 2011");
+    user["user"]["verification"] = serde_json::json!({"verified":true,"type":"individual"});
+    let p = parse_profile(200, &user.to_string(), "jack").unwrap();
+    assert_eq!(p.followers, Some(9876543));
+    assert!(p.banner.is_some());
+    assert_eq!(p.verified, Some(true));
+    let mut status: serde_json::Value = serde_json::from_str(POST).unwrap();
+    status["status"]["likes"] = serde_json::json!(0);
+    status["status"]["views"] = serde_json::Value::Null;
+    status["status"]["replies"] = serde_json::json!(34);
+    let p = parse_post(200, &status.to_string(), "20").unwrap();
+    assert_eq!(p.metrics.likes, Some(0));
+    assert_eq!(p.metrics.views, None);
+    assert_eq!(p.metrics.replies, Some(34));
+}
+#[test]
+fn conversation_checks_focal_identity_and_retains_reply_cursor() {
+    let status: serde_json::Value = serde_json::from_str(POST).unwrap();
+    let mut reply = status["status"].clone();
+    reply["id"] = serde_json::json!("21");
+    reply["text"] = serde_json::json!("a real reply");
+    let body=serde_json::json!({"code":200,"status":status["status"],"thread":null,"replies":[reply,{"type":"tombstone","reason":"deleted","provider":"twitter","message":"gone"}],"cursor":{"bottom":"reply+/="}}).to_string();
+    let c = limitless_fxtwitter::parse_conversation(200, &body, "20").unwrap();
+    assert_eq!(c.post.id, "20");
+    assert_eq!(c.replies[0].id, "21");
+    assert_eq!(c.next_cursor.as_deref(), Some("reply+/="));
+    assert_eq!(c.unavailable_replies, 1);
+    assert!(limitless_fxtwitter::parse_conversation(200, &body, "22").is_err());
+    assert_eq!(
+        limitless_fxtwitter::conversation_endpoint("20", Some("reply+/=")).unwrap(),
+        "https://api.fxtwitter.com/2/conversation/20?cursor=reply%2B%2F%3D"
+    );
+}
+
+#[test]
+fn accepts_the_actual_live_v2_conversation_shape() {
+    let c = limitless_fxtwitter::parse_conversation(
+        200,
+        include_str!("../../../tests/fixtures/public-conversation.json"),
+        "2115761952937128381",
+    )
+    .unwrap();
+    assert_eq!(c.replies.len(), 2);
+    assert!(c.next_cursor.is_some());
+    assert!(c.post.metrics.likes.is_some());
+}

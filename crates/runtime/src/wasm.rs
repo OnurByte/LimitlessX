@@ -82,6 +82,11 @@ enum Request {
         session: String,
         id: String,
     },
+    Replies {
+        session: String,
+        target: Target,
+        cursor: String,
+    },
 }
 #[derive(Deserialize)]
 struct ActiveContext {
@@ -188,10 +193,12 @@ async fn fetch(
     timeline: bool,
     cursor: Option<&str>,
 ) -> Result<(u16, String), Error> {
+    fetch_url(provider::endpoint(target, timeline, cursor)?).await
+}
+async fn fetch_url(endpoint: String) -> Result<(u16, String), Error> {
     if COOLDOWN.with(|v| v.get() > now()) {
         return Err(Error::RateLimited);
     }
-    let endpoint = provider::endpoint(target, timeline, cursor)?;
     let controller = web_sys::AbortController::new().map_err(|_| Error::Network)?;
     let init = web_sys::RequestInit::new();
     init.set_method("GET");
@@ -284,6 +291,16 @@ async fn get_post(target: &Target) -> Result<Post, Error> {
     let (h, b) = fetch(target, false, None).await?;
     provider::parse_post(h, &b, id)
 }
+async fn get_conversation(
+    target: &Target,
+    cursor: Option<&str>,
+) -> Result<limitless_core::Conversation, Error> {
+    let Target::Post { id } = target else {
+        return Err(Error::InvalidTarget);
+    };
+    let (h, b) = fetch_url(provider::conversation_endpoint(id, cursor)?).await?;
+    provider::parse_conversation(h, &b, id)
+}
 async fn get_profile(target: &Target) -> Result<Profile, Error> {
     let Target::Profile { handle } = target else {
         return Err(Error::InvalidTarget);
@@ -362,15 +379,17 @@ async fn handle(request: Request, sender: Sender) -> Result<Value, Error> {
             let all: std::collections::HashMap<String, Session> =
                 decode(session_all().await.map_err(|_| Error::Storage)?)?;
             for (key, mut session) in all {
-                if session.pending
-                    && session.valid(&session.target, now())
-                    && session.bound_to(&sender)
-                {
+                if session.valid(&session.target, now()) && session.bound_to(&sender) {
                     session.pending = false;
                     session_set(&key, js(&session))
                         .await
                         .map_err(|_| Error::Storage)?;
                     let token = key.strip_prefix("reader:").ok_or(Error::Expired)?;
+                    if let Some(content) = &session.content {
+                        return Ok(
+                            json!({"view":crate::view::reader(content,&session.target,token,session.restricted)}),
+                        );
+                    }
                     return Ok(
                         json!({"session":token,"target":session.target,"view":crate::view::loading(&session.target),"load":{"op":"read","session":token,"target":session.target}}),
                     );
@@ -413,7 +432,31 @@ async fn handle(request: Request, sender: Sender) -> Result<Value, Error> {
             let mut s = load_session(&session, Some(&target), &sender).await?;
             match &target {
                 Target::Post { .. } => {
-                    let post = get_post(&target).await?;
+                    let (post, conversation, replies_error) = match get_conversation(&target, None)
+                        .await
+                    {
+                        Ok(conversation) => (conversation.post.clone(), Some(conversation), None),
+                        Err(
+                            error @ (Error::Protected
+                            | Error::Deleted
+                            | Error::Suspended
+                            | Error::RateLimited
+                            | Error::Network
+                            | Error::Timeout),
+                        ) => return Err(error),
+                        Err(error) => (get_post(&target).await?, None, Some(error.to_string())),
+                    };
+                    if let Some(conversation) = &conversation {
+                        for post in conversation
+                            .thread
+                            .iter()
+                            .chain(conversation.replies.iter())
+                        {
+                            if !s.allowed_posts.contains(&post.id) {
+                                s.allowed_posts.push(post.id.clone());
+                            }
+                        }
+                    }
                     let record_error = if s.restricted && s.deliberate {
                         limitless_storage::record(Some(("post", &post.id)), None, false)
                             .await
@@ -424,6 +467,8 @@ async fn handle(request: Request, sender: Sender) -> Result<Value, Error> {
                     };
                     s.content = Some(crate::view::Content {
                         post: Some(post),
+                        conversation,
+                        replies_error,
                         record_error,
                         ..Default::default()
                     });
@@ -436,21 +481,29 @@ async fn handle(request: Request, sender: Sender) -> Result<Value, Error> {
                 }
                 Target::Profile { handle } => {
                     let profile = get_profile(&target).await;
+                    if let Err(error @ (Error::Protected | Error::Suspended | Error::Deleted)) =
+                        &profile
+                    {
+                        return Err(error.clone());
+                    }
                     let feed = timeline(&session, &mut s, None).await;
                     if let Err(error) = &profile
                         && feed.is_err()
                     {
                         return Err(error.clone());
                     }
-                    let profile_error = profile.as_ref().err().map(ToString::to_string);
+                    let mut profile_error = profile.as_ref().err().map(ToString::to_string);
                     let profile = profile.ok().or_else(|| {
                         feed.as_ref()
                             .ok()?
                             .posts
                             .iter()
-                            .find(|p| p.author.handle == *handle)
+                            .find(|p| p.author.handle.eq_ignore_ascii_case(handle))
                             .map(|p| p.author.clone())
                     });
+                    if profile.is_some() {
+                        profile_error = None;
+                    }
                     let record_error = if s.restricted && s.deliberate {
                         if let Some(p) = profile.as_ref() {
                             limitless_storage::record(Some(("profile", &p.id)), None, false)
@@ -498,6 +551,37 @@ async fn handle(request: Request, sender: Sender) -> Result<Value, Error> {
             feed.next_cursor = next
                 .next_cursor
                 .filter(|next| Some(next) != cursor.as_ref());
+            session_set(&session_key(&session)?, js(&s))
+                .await
+                .map_err(|_| Error::Storage)?;
+            Ok(
+                json!({"view":crate::view::reader(s.content.as_ref().unwrap(),&target,&session,s.restricted)}),
+            )
+        }
+        Request::Replies {
+            session,
+            target,
+            cursor,
+        } => {
+            let mut s = load_session(&session, Some(&target), &sender).await?;
+            let next = get_conversation(&target, Some(&cursor)).await?;
+            for post in &next.replies {
+                if !s.allowed_posts.contains(&post.id) && s.allowed_posts.len() < 2000 {
+                    s.allowed_posts.push(post.id.clone());
+                }
+            }
+            let conversation = s
+                .content
+                .as_mut()
+                .and_then(|c| c.conversation.as_mut())
+                .ok_or(Error::Expired)?;
+            for post in next.replies {
+                if !conversation.replies.iter().any(|p| p.id == post.id) {
+                    conversation.replies.push(post);
+                }
+            }
+            conversation.unavailable_replies += next.unavailable_replies;
+            conversation.next_cursor = next.next_cursor.filter(|c| c != &cursor);
             session_set(&session_key(&session)?, js(&s))
                 .await
                 .map_err(|_| Error::Storage)?;

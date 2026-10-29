@@ -123,3 +123,16 @@ fn record_is_per_install_per_kind_and_does_not_store_ids() {
     assert_ne!(a, record_key(&[1; 32], "post", "422861505"));
     assert!(!a.contains("422861505"));
 }
+
+#[test]
+fn detects_the_actual_helium_x_account_withheld_dom_text() {
+    let notice=Notice{text:"Account Withheld@ekrem_imamoglu has been withheld in TR in response to a legal demand. https://Learn more.".into(),policy_url:"https://help.x.com/en/rules-and-policies/post-withheld-by-country".into()};
+    assert_eq!(
+        Restriction::detect(&Target::parse("@ekrem_imamoglu").unwrap(), &notice),
+        Some(Restriction::Regional)
+    );
+    assert_eq!(
+        Restriction::detect(&Target::parse("@other").unwrap(), &notice),
+        None
+    );
+}

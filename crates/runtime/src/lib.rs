@@ -1,3 +1,4 @@
+mod icons;
 pub mod view;
 use limitless_core::Target;
 use serde::{Deserialize, Serialize};
@@ -61,6 +62,7 @@ pub fn authorized(sender: &Sender, op: &str) -> bool {
                 | "read"
                 | "timeline"
                 | "open_post"
+                | "replies"
         )
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
