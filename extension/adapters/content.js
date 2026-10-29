@@ -3,7 +3,7 @@
   const api = globalThis.browser ?? chrome;
   const send = message => api.runtime.sendMessage({ ...message, page_url: location.href });
   let timer, generation = 0, lastUrl = location.href;
-  let styleReady, themeSheet, themeSignature, host, root, mountedUrl, revision = 0, suppressedRoute, inspectedKey, booting = true, cachedPresentation;
+  let styleReady, themeSheet, themeSignature, host, root, mountedUrl, revision = 0, suppressedRoute, inspectedKey, booting = true, cachedPresentation, deferredPresentation, replacingNative = false;
   const hiddenNotices = new Map();
   const restoreNotices = () => {
     for (const [node, original] of hiddenNotices) {
@@ -55,7 +55,7 @@
     try {
       const response = await send(message);
       if (attempt !== revision || mountedUrl !== sourceUrl || location.href !== sourceUrl || !host?.isConnected) return;
-      if (!response?.ok) restoreNotices();
+      if (!response?.ok) { replacingNative = false; restoreNotices(); }
       await apply(response?.ok ? response.data : { ...response, retry: message });
     } catch (error) {
       console.warn('LimitlessX DOM rendering failed:', error);
@@ -72,8 +72,35 @@
       themeSignature = background;
       themeSheet.replaceSync(`:host{--bg:${background ?? (dark ? '#000' : '#fff')};--fg:${dark ? '#e7e9ea' : '#0f1419'};--muted:${dark ? '#71767b' : '#536471'};--line:${dark ? '#2f3336' : '#eff3f4'};--panel:${dark ? '#16181c' : '#f7f9f9'}}`);
   };
+  // X owns and can replace the primary column at any time. Never mount elsewhere.
+  const reconcilePlacement = () => {
+    const primary = document.querySelector('[data-testid="primaryColumn"]');
+    if (!primary || !host || mountedUrl !== location.href) return;
+    if (host.parentElement !== primary) primary.append(host);
+    if (!replacingNative) return;
+    const regions = new Set(roots().map(notice => {
+      let region = notice;
+      for (let ancestor = notice.parentElement; ancestor && ancestor !== primary; ancestor = ancestor.parentElement) {
+        if (ancestor.querySelector('[data-testid="UserName"]') && !ancestor.querySelector('h2[role="heading"]')) region = ancestor;
+      }
+      return region;
+    }));
+    for (const timeline of primary?.querySelectorAll('[aria-label^="Timeline:"]') ?? []) regions.add(timeline);
+    for (const node of hiddenNotices.keys()) if (!node.isConnected) hiddenNotices.delete(node);
+    for (const node of regions) {
+      if (node.contains(host)) continue;
+      if (hiddenNotices.has(node) && node.hidden && node.classList.contains('limitlessx-notice-hidden')) continue;
+      if (!hiddenNotices.has(node)) hiddenNotices.set(node, { hidden: node.hidden, classed: node.classList.contains('limitlessx-notice-hidden') });
+      node.classList.add('limitlessx-notice-hidden'); node.hidden = true;
+    }
+  };
   const present = async context => {
     const sourceUrl = location.href;
+    if (!document.querySelector('[data-testid="primaryColumn"]')) {
+      deferredPresentation = { url: sourceUrl, context };
+      return { ok: true };
+    }
+    deferredPresentation = undefined;
     try {
       styleReady ??= fetch(api.runtime.getURL('styles/app.css')).then(response => response.text()).then(css => {
         const sheet = new CSSStyleSheet(); sheet.replaceSync(css); return sheet;
@@ -84,18 +111,11 @@
       host.setAttribute('role', 'region'); host.setAttribute('aria-label', 'LimitlessX public content');
       const shadow = host.attachShadow({ mode: 'open' }); shadow.adoptedStyleSheets = [sheet];
       root = document.createElement('div'); root.className = 'inline-root'; shadow.append(root);
-      (document.querySelector('[data-testid="primaryColumn"]') ?? document.querySelector('main') ?? document.body).append(host);
-      mountedUrl = sourceUrl;
       const primary = document.querySelector('[data-testid="primaryColumn"]');
-      const regions = new Set(roots().map(notice => {
-        let region = notice;
-        for (let ancestor = notice.parentElement; ancestor && ancestor !== primary; ancestor = ancestor.parentElement) {
-          if (ancestor.querySelector('[data-testid="UserName"]') && !ancestor.querySelector('h2[role="heading"]')) region = ancestor;
-        }
-        return region;
-      }));
-      for (const timeline of primary?.querySelectorAll('[aria-label^="Timeline:"]') ?? []) regions.add(timeline);
-      for (const node of regions) { hiddenNotices.set(node, { hidden: node.hidden, classed: node.classList.contains('limitlessx-notice-hidden') }); node.classList.add('limitlessx-notice-hidden'); node.hidden = true; }
+      if (!primary) { deferredPresentation = { url: sourceUrl, context }; host = undefined; root = undefined; return { ok: true }; }
+      primary.append(host);
+      mountedUrl = sourceUrl;
+      replacingNative = true; reconcilePlacement();
       themeSheet = new CSSStyleSheet(); syncTheme();
       shadow.adoptedStyleSheets = [sheet, themeSheet];
       await apply(context);
@@ -110,11 +130,15 @@
     const nodes = roots();
     if (location.href !== lastUrl) {
       for (const [node, text] of previousNodes) if (!staleNodes.has(node)) staleNodes.set(node, { text, url: lastUrl });
-      clearInline(); cachedPresentation = undefined; suppressedRoute = undefined; inspectedKey = undefined; lastUrl = location.href; ++generation; recoverPending();
+      clearInline(); cachedPresentation = undefined; deferredPresentation = undefined; suppressedRoute = undefined; inspectedKey = undefined; lastUrl = location.href; ++generation; recoverPending();
+    }
+    if (deferredPresentation?.url === location.href && document.querySelector('[data-testid="primaryColumn"]')) {
+      const deferred = deferredPresentation; deferredPresentation = undefined; present(deferred.context);
     }
     if (mountedUrl && !host?.isConnected && mountedUrl === location.href && cachedPresentation) {
       const cached = cachedPresentation; clearInline(); present(cached);
     } else if (mountedUrl && mountedUrl !== location.href) clearInline();
+    reconcilePlacement();
     previousNodes = new Map(nodes.map(node => [node, signature(node)]));
     return {
       url: location.href,

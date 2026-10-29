@@ -1,5 +1,5 @@
 {
-  "verified_at": "2026-10-29T22:38:36.325678+00:00",
+  "verified_at": "2026-10-29T22:56:31.451272+00:00",
   "native_tests": {
     "passed": 21,
     "failed": 0
@@ -35,7 +35,10 @@
       "17/24 main post and 15/20 reply typography",
       "40px avatar and 8px gap",
       "reply pagination and deliberate view accounting",
-      "DOM removal recovery and equivalent post URL redirect"
+      "DOM removal recovery and equivalent post URL redirect",
+      "delayed primary column: never mount in body/main",
+      "primary replacement twice without duplicate provider requests",
+      "native timeline arriving after extension mount"
     ],
     "firefox": [
       "packaged event-page/popup smoke",
@@ -50,7 +53,12 @@
       "extension_id": "lbeeopacdoaccgmepkfhilamcdnhibii",
       "regional_profile": "Actual x.com/ekrem_imamoglu regional notice automatically replaced with public profile. Latest timeline lookup returned not-found; earlier lookup returned posts.",
       "conversation": "Actual public post 2115761952937128381 rendered with 34 provider replies; native main text 17/24, replies 15/20, avatars 40px and 8px gap.",
-      "inspection": "User-authorized Chrome DevTools MCP connected to existing Helium profile; no browser restart."
+      "inspection": "User-authorized Chrome DevTools MCP connected to existing Helium profile; no browser restart.",
+      "lifecycle_fix": {
+        "before": "Host outside primary: 1225.36px wide under native placeholder",
+        "after": "Host inside primary: 598.18px wide within 600px column; native placeholder hidden; profile and timeline displayed",
+        "normal_navigation": "Public post has no extension host or hidden native regions"
+      }
     }
   },
   "transport_limits": {
