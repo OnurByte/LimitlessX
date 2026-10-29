@@ -1,0 +1,24 @@
+[package]
+name = "limitless-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+limitless-core.workspace = true
+limitless-fxtwitter.workspace = true
+limitless-storage.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+url.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+serde-wasm-bindgen.workspace = true
+js-sys.workspace = true
+web-sys = { workspace = true, features = ["Request", "RequestInit", "RequestCredentials", "RequestRedirect", "RequestCache", "Response", "Headers", "AbortController", "AbortSignal", "ReadableStream", "ReadableStreamDefaultReader"] }
