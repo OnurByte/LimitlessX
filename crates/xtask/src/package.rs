@@ -25,7 +25,7 @@ pub fn validate_manifest(m: &Value) -> Result<(), String> {
         "https://www.twitter.com/*"
     ]);
     if m["content_scripts"][0]["matches"] != matches
-        || m["content_scripts"][0]["js"] != json!(["adapters/content.js"])
+        || m["content_scripts"][0]["js"] != json!(["adapters/player.js", "adapters/content.js"])
     {
         return Err("Unexpected content-script scope".into());
     }
@@ -84,6 +84,7 @@ pub fn validate(root: &Path) -> Result<(), String> {
         "popup.html",
         "adapters/background.js",
         "adapters/content.js",
+        "adapters/player.js",
         "adapters/ui.js",
         "styles/app.css",
         "brand/mark.svg",
@@ -152,6 +153,9 @@ pub fn release() -> Result<(), String> {
         )?;
     }
     let paths = [
+        "package.json",
+        "package-lock.json",
+        "tsconfig.json",
         "Cargo.toml",
         "Cargo.lock",
         "rust-toolchain.toml",

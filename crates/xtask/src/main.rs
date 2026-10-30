@@ -28,6 +28,11 @@ fn build(browser: &str) -> Result<(), String> {
     if !["chromium", "firefox"].contains(&browser) {
         return Err("Expected chromium or firefox".into());
     }
+    let adapters = Path::new("target/adapters");
+    if adapters.exists() {
+        fs::remove_dir_all(adapters).map_err(|e| e.to_string())?;
+    }
+    run(Command::new("npm").args(["run", "build:adapters"]))?;
     run(Command::new("cargo").args([
         "build",
         "--locked",
@@ -44,7 +49,7 @@ fn build(browser: &str) -> Result<(), String> {
         fs::remove_dir_all(&out).map_err(|e| e.to_string())?;
     }
     copy_dir(Path::new("extension/static"), &out)?;
-    copy_dir(Path::new("extension/adapters"), &out.join("adapters"))?;
+    copy_dir(Path::new("target/adapters"), &out.join("adapters"))?;
     fs::copy(
         format!("extension/manifests/{browser}.json"),
         out.join("manifest.json"),
@@ -95,7 +100,10 @@ fn main() -> ExitCode {
             build("firefox")?;
             package::release()
         })(),
-        Some("test") => run(Command::new("cargo").args(["test", "--workspace", "--locked"])),
+        Some("test") => (|| {
+            run(Command::new("npm").args(["run", "typecheck"]))?;
+            run(Command::new("cargo").args(["test", "--workspace", "--locked"]))
+        })(),
         _ => Err("Usage: cargo xtask build <chromium|firefox> | test | package".into()),
     };
     match result {

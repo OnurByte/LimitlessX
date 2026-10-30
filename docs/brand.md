@@ -7,3 +7,5 @@ Typography: Helvetica Neue, Helvetica, Arial, sans-serif. Use 4px spacing increm
 Primary tagline: **No VPN. No proxy setup. No DPI hacks.**
 
 Always qualify access: public content is available only when the alternative source returns it. No anonymity, guaranteed bypass, universal compatibility, fake installation counts or unverified store badges.
+
+Popup reference: docs/reference/design-reference.md, captured from the user-referenced onur.af brand.md. Apply its monochrome tokens, normal typography, functional copy, 44px controls and restrained spacing to LimitlessX; retain the By Onur signature as explicitly requested. No marketing hero or identity labels are needed inside the popup. X-injected content follows X itself. README carries the product motto and open-source identity.

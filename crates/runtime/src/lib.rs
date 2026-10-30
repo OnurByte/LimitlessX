@@ -74,6 +74,8 @@ pub struct Session {
     pub deliberate: bool,
     #[serde(default)]
     pub pending: bool,
+    #[serde(default)]
+    pub created: f64,
     pub expires: f64,
     pub tab_id: i32,
     #[serde(default)]

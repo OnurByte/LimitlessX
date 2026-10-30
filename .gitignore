@@ -3,3 +3,5 @@
 .superpowers/
 __pycache__/
 /tests/browser/artifacts/
+
+/node_modules/

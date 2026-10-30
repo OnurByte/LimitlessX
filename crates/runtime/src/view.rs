@@ -419,6 +419,9 @@ fn profile(p: &Profile) -> Node {
     )
 }
 impl Node {
+    fn with_attr(self, key: &str, value: &str) -> Self {
+        attr(self, key, value)
+    }
     fn with_children(mut self, next: Vec<Node>) -> Self {
         if let Node::Element { children, .. } = &mut self {
             *children = next;
@@ -475,6 +478,25 @@ fn date_label(value: &str, detailed: bool) -> String {
     let _ = detailed;
     short_date(value)
 }
+fn media_control(label: &str, command: &str, path: &str) -> Node {
+    attr(
+        attr(
+            attr(
+                el(
+                    "button",
+                    "lx-media-button",
+                    vec![svg(path, "lx-media-icon")],
+                ),
+                "type",
+                "button",
+            ),
+            "aria-label",
+            label,
+        ),
+        "data-media-command",
+        command,
+    )
+}
 fn media(p: &Post) -> Node {
     el(
         "div",
@@ -518,7 +540,20 @@ fn media(p: &Post) -> Node {
                     if let Some(preview) = &m.preview {
                         n = attr(n, "poster", preview);
                     }
-                    n
+                    let controls=el("div","lx-media-controls",vec![
+                        media_control("Play video","play","M8 5v14l11-7z"),
+                        attr(attr(attr(attr(attr(el("input","lx-seek",vec![]),"type","range"),"min","0"),"max","1000"),"value","0"),"aria-label","Seek video").with_attr("data-media-role","seek"),
+                        attr(el("span","lx-media-time",vec![text("0:00 / 0:00")]),"data-media-role","time"),
+                        media_control("Mute video","mute","M3 9v6h4l5 4V5L7 9H3zm12-2v10c2-1 3-3 3-5s-1-4-3-5z"),
+                        attr(attr(attr(attr(attr(attr(el("input","lx-volume",vec![]),"type","range"),"min","0"),"max","1"),"step","0.05"),"value","1"),"aria-label","Volume").with_attr("data-media-role","volume"),
+                        attr(attr(el("select","lx-speed",["0.5","1","1.5","2"].into_iter().map(|rate|attr(el("option","",vec![text(format!("{rate}×"))]),"value",rate)).collect()),"aria-label","Playback speed"),"data-media-role","speed"),
+                        media_control("Full screen","fullscreen","M3 3h7v2H5v5H3V3zm11 0h7v7h-2V5h-5V3zM3 14h2v5h5v2H3v-7zm16 0h2v7h-7v-2h5v-5z"),
+                    ]);
+                    el("div","lx-player",vec![n,controls,
+                        attr(attr(el("p","lx-media-status",vec![]),"data-media-role","status"),"role","status"),
+                        attr(attr(el("button","lx-media-retry",vec![text("Retry video")]),"type","button"),"data-media-command","retry"),
+                        attr(link("Open video on X",format!("https://x.com/{}/status/{}",p.author.handle,p.id)),"class","lx-media-source"),
+                    ])
                 }
             })
             .collect(),
@@ -730,6 +765,12 @@ pub fn reader(content: &Content, target: &Target, token: &str, _restricted: bool
     if let Some(p) = &content.post {
         children.push(post(p, token, true));
     }
+    if content.timeline.is_none() && content.timeline_error.is_some() {
+        children.push(button(
+            "Try again",
+            json!({"op":"read","session":token,"target":target}),
+        ));
+    }
     if let Some(t) = &content.timeline {
         if !t
             .posts
@@ -794,7 +835,11 @@ pub fn reader(content: &Content, target: &Target, token: &str, _restricted: bool
         if let Some(cursor) = &c.next_cursor {
             children.push(attr(
                 button(
-                    "Show more replies",
+                    if content.replies_error.is_some() {
+                        "Try again"
+                    } else {
+                        "Show more replies"
+                    },
                     json!({"op":"replies","session":token,"target":target,"cursor":cursor}),
                 ),
                 "class",
@@ -817,5 +862,25 @@ pub fn reader(content: &Content, target: &Target, token: &str, _restricted: bool
             link("FxTwitter", "https://github.com/FxEmbed/FxEmbed".into()),
         ],
     ));
-    frame(children)
+    let page = if let Some(p) = &content.profile {
+        Some((
+            format!("{} (@{}) / X", p.name, p.handle),
+            p.biography.clone().unwrap_or_default(),
+        ))
+    } else {
+        content
+            .post
+            .as_ref()
+            .map(|p| (format!("{} on X", p.author.name), p.text.clone()))
+    };
+    let node = frame(children);
+    if let Some((title, description)) = page {
+        attr(
+            attr(node, "data-page-title", title),
+            "data-page-description",
+            description,
+        )
+    } else {
+        node
+    }
 }

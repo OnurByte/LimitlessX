@@ -77,6 +77,7 @@ struct RawProfile {
     joined: Option<String>,
     followers: Option<u64>,
     following: Option<u64>,
+    statuses: Option<u64>,
     website: Option<RawWebsite>,
     verification: Option<RawVerification>,
 }
@@ -115,6 +116,7 @@ impl RawProfile {
             joined: self.joined,
             followers: self.followers,
             following: self.following,
+            statuses: self.statuses,
             website: self
                 .website
                 .and_then(|w| url::Url::parse(&w.url).ok())
@@ -348,6 +350,62 @@ pub fn conversation_endpoint(id: &str, cursor: Option<&str>) -> Result<String, E
         if cursor.len() > 4096 {
             return Err(Error::InvalidResponse);
         }
+        url.query_pairs_mut().append_pair("cursor", cursor);
+    }
+    Ok(url.into())
+}
+
+/// Use public typeahead only to resolve identity. Its placeholder zero counters are not profile data.
+pub fn identity_endpoint(handle: &str) -> Result<String, Error> {
+    let handle = valid_handle(handle).ok_or(Error::InvalidTarget)?;
+    let mut url = url::Url::parse("https://api.fxtwitter.com/2/typeahead").unwrap();
+    url.query_pairs_mut()
+        .append_pair("q", &handle)
+        .append_pair("result_type", "users");
+    Ok(url.into())
+}
+pub fn parse_identity(http: u16, body: &str, expected: &str) -> Result<String, Error> {
+    check(http, body)?;
+    #[derive(Deserialize)]
+    struct Candidate {
+        id: String,
+        screen_name: String,
+        protected: bool,
+    }
+    #[derive(Deserialize)]
+    struct Response {
+        users: Vec<Candidate>,
+    }
+    let response: Response = serde_json::from_str(body).map_err(|_| Error::InvalidResponse)?;
+    if response.users.len() > 100 {
+        return Err(Error::InvalidResponse);
+    }
+    let user = response
+        .users
+        .into_iter()
+        .find(|u| u.screen_name.eq_ignore_ascii_case(expected))
+        .ok_or(Error::NotFound)?;
+    if user.protected {
+        return Err(Error::Protected);
+    }
+    if !valid_id(&user.id) {
+        return Err(Error::InvalidResponse);
+    }
+    Ok(user.id)
+}
+pub fn id_endpoint(id: &str, timeline: bool, cursor: Option<&str>) -> Result<String, Error> {
+    if !valid_id(id) || cursor.is_some_and(|c| c.len() > 4096) {
+        return Err(Error::InvalidTarget);
+    }
+    let mut url = url::Url::parse(&format!(
+        "https://api.fxtwitter.com/2/profile/id:{id}{}",
+        if timeline { "/statuses" } else { "" }
+    ))
+    .unwrap();
+    if timeline {
+        url.query_pairs_mut().append_pair("count", "5");
+    }
+    if let Some(cursor) = cursor {
         url.query_pairs_mut().append_pair("cursor", cursor);
     }
     Ok(url.into())

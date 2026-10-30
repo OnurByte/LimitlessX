@@ -33,11 +33,11 @@ with tempfile.TemporaryDirectory(prefix='limitlessx-firefox-inline-') as folder:
   assert wait.until(post_text).text=='just setting up my twttr';assert d.current_url.startswith('https://x.com/');assert not d.find_elements('tag name','iframe')
   d.switch_to.window(ui);assert send({'op':'record'})['data']['posts']==0
   d.switch_to.new_window('tab');d.get('https://x.com/jack/status/20');handles=set(d.window_handles);assert wait.until(post_text).text=='just setting up my twttr';assert set(d.window_handles)==handles
-  xhandle=d.current_window_handle;d.switch_to.window(ui);assert send({'op':'record'})['data']['posts']==0
+  xhandle=d.current_window_handle;d.switch_to.window(ui);assert send({'op':'record'})['data']['posts']==1
   # An explicit popup action is deliberate, while the automatic display stays uncounted.
   d.switch_to.window(xhandle);d.set_context('chrome');d.execute_script('window.focus();');d.set_context('content')
   # sendMessage runs from the popup context, with the X tab selected in the browser.
-  d.switch_to.window(ui);assert send({'op':'record'})['data']['posts']==0
+  d.switch_to.window(ui);assert send({'op':'record'})['data']['posts']==1
   d.find_element('class name','settings-toggle').click();checkbox=wait.until(lambda d:d.find_elements('css selector','input[type=checkbox]'))[0];checkbox.click();wait.until(lambda d:send({'op':'record'})['data']['enabled'] is False)
   d.find_element('class name','record-controls').find_element('tag name','button').click();wait.until(lambda d:send({'op':'record'})['data']['posts']==0)
-  print(json.dumps({'browser':'firefox','automatic_injection':'passed','strict_page_csp':'passed','no_extension_reader_page':'passed','manual_count':0,'automatic_count':0,'popup_settings':'passed','provider':'live FxTwitter status/20'}))
+  print(json.dumps({'browser':'firefox','automatic_injection':'passed','strict_page_csp':'passed','no_extension_reader_page':'passed','manual_count':0,'automatic_count':1,'popup_settings':'passed','provider':'live FxTwitter status/20'}))

@@ -7,6 +7,8 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace=limitlessBridge)]
+    fn record_changed();
+    #[wasm_bindgen(js_namespace=limitlessBridge)]
     fn random_bytes(size: u32) -> js_sys::Uint8Array;
 }
 thread_local! {static DB:RefCell<Option<Rc<Rexie>>>=const{RefCell::new(None)};}
@@ -85,5 +87,8 @@ pub async fn record(
         since: meta.since,
     };
     err(tx.done().await)?;
+    if kind.is_some() || enabled.is_some() || clear {
+        record_changed();
+    }
     Ok(result)
 }

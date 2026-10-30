@@ -44,13 +44,13 @@ with sync_playwright() as p,tempfile.TemporaryDirectory(prefix='limitlessx-inlin
   isolated=content_sender(x)
   sessions=ui.evaluate('chrome.storage.session.get(null)');token=next(k[7:] for k,v in sessions.items() if v['source']=={'kind':'profile','handle':'jack'})
   assert not isolated({'op':'open_post','session':token,'id':'999'})['ok']
-  x.locator('#limitlessx-inline .post-text').first.click();x.locator('#limitlessx-inline .post-text').wait_for();assert x.locator('#limitlessx-inline .post-card').count()==1
+  x.locator('#limitlessx-inline .post-text').first.click();x.locator('#limitlessx-inline .detailed-post .post-text').wait_for();assert x.locator('#limitlessx-inline .post-card').count()==1
   assert len(ctx.pages)==3,'opening a timeline post created another tab'
   assert x.url=='https://x.com/jack';assert send({'op':'record'})['data']['posts']==0
   report['same_container_post_open']='passed'
   # A restricted direct-post flow counts once, even under racing reads.
   z=ctx.new_page();z.goto('https://x.com/jack/status/20');action=z.locator('#limitlessx-inline .post-text').wait_for()
-  assert send({'op':'record'})['data']['posts']==0
+  assert send({'op':'record'})['data']['posts']==1
   z.bring_to_front();assert send({'op':'open_current'})['ok']
   assert send({'op':'record'})['data']['posts']==1
   sessions=ui.evaluate('chrome.storage.session.get(null)');token=next(k[7:] for k,v in sessions.items() if v['restricted'] and v.get('deliberate') and v['target']=={'kind':'post','id':'20'})

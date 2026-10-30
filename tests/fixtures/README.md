@@ -1,0 +1,1 @@
+player.webm is a generated 12-second black frame and 220 Hz test tone, created with FFmpeg for media-control tests. It contains no third-party footage. Public conversation fixtures have sanitized post text and exercise provider schema normalization.

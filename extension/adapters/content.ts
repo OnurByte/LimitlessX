@@ -1,12 +1,41 @@
 // Observe a bounded set of X notice elements. Rust interprets their contents.
 (() => {
   const api = globalThis.browser ?? chrome;
-  const send = message => api.runtime.sendMessage({ ...message, page_url: location.href });
-  let timer, generation = 0, lastUrl = location.href;
-  let styleReady, themeSheet, themeSignature, host, root, mountedUrl, revision = 0, suppressedRoute, inspectedKey, booting = true, cachedPresentation, deferredPresentation, replacingNative = false;
-  const hiddenNotices = new Map();
-  const descriptions = new WeakMap(), scrollActions = new WeakMap();
-  let scrollObserver, scrollArmed = false, lastAutoScroll = -1, autoBusy = false;
+  const send = (message: Action) => api.runtime.sendMessage({ ...message, page_url: location.href });
+  let timer: ReturnType<typeof setTimeout> | undefined, generation = 0, lastUrl = location.href;
+  let styleReady: Promise<CSSStyleSheet> | undefined, themeSheet: CSSStyleSheet | undefined, themeSignature: string | undefined;
+  let host: HTMLDivElement | undefined, root: HTMLDivElement | undefined, mountedUrl: string | undefined;
+  let revision = 0, suppressedRoute: string | undefined, inspectedKey: string | undefined, booting = true;
+  let cachedPresentation: Presentation | undefined, deferredPresentation: {url:string;context:Presentation} | undefined, replacingNative = false;
+  let ownedMetadata: {originalTitle:string;title:string;description:string;nodes:[HTMLMetaElement,string|null,string][]} | undefined;
+  const restoreMetadata = () => {
+    if (!ownedMetadata) return;
+    if (document.title === ownedMetadata.title) document.title = ownedMetadata.originalTitle;
+    for (const [node,original,written] of ownedMetadata.nodes) if (node.content === written) { if (original === null) node.remove(); else node.content = original; }
+    ownedMetadata = undefined;
+  };
+  const setMetadata = (view: Element) => {
+    const title = view.getAttribute('data-page-title');
+    if (!title) { restoreMetadata(); return; }
+    const description = view.getAttribute('data-page-description') ?? '';
+    if (ownedMetadata?.title === title && ownedMetadata.description === description && ownedMetadata.nodes.every(([node]) => node.isConnected)) {
+      if (document.title !== title) document.title = title;
+      for (const [node,,written] of ownedMetadata.nodes) if (node.content !== written) node.content = written;
+      return;
+    }
+    restoreMetadata();
+    ownedMetadata = { originalTitle: document.title, title, description, nodes: [] };
+    document.title = title;
+    for (const selector of ['meta[property="og:title"]','meta[property="og:description"]','meta[name="description"]']) {
+      let node = document.querySelector<HTMLMetaElement>(selector);
+      const original = node?.content ?? null;
+      if (!node) { node = document.createElement('meta'); const match = selector.match(/\[(property|name)="([^"]+)"\]/)!; node.setAttribute(match[1],match[2]); document.head.append(node); }
+      const written = selector.includes('title') ? title : description; ownedMetadata.nodes.push([node,original,written]); node.content = written;
+    }
+  };
+  const hiddenNotices = new Map<HTMLElement,{hidden:boolean;classed:boolean}>();
+  const descriptions = new WeakMap<Node,string>(), scrollActions = new WeakMap<Element,Action>();
+  let scrollObserver: IntersectionObserver | undefined, scrollArmed = false, lastAutoScroll = -1, autoBusy = false;
   const restoreNotices = () => {
     for (const [node, original] of hiddenNotices) {
       node.hidden = original.hidden;
@@ -15,13 +44,14 @@
     hiddenNotices.clear();
   };
   const clearInline = () => {
-    scrollObserver?.disconnect(); scrollArmed = false; lastAutoScroll = -1; autoBusy = false;
+    if (root) pauseMedia(root);
+    restoreMetadata(); scrollObserver?.disconnect(); scrollArmed = false; lastAutoScroll = -1; autoBusy = false;
     ++revision; themeSheet = undefined; themeSignature = undefined; restoreNotices(); host?.remove(); host = undefined; root = undefined; mountedUrl = undefined;
   };
   // Generic DOM transport: Rust supplies the complete view and each action.
-  const tags = new Set(['main','header','div','section','article','p','h1','h2','strong','span','time','img','video','a','button','svg','path','br']);
-  const attributes = new Set(['class','href','src','alt','loading','crossorigin','referrerpolicy','poster','controls','preload','type','role','target','rel','viewBox','fill','d','aria-label','aria-hidden','tabindex','title','datetime','data-autoload','data-post-id','playsinline']);
-  const element = description => {
+  const tags = new Set(['main','header','div','section','article','p','h1','h2','strong','span','time','img','video','a','button','svg','path','br','input','select','option']);
+  const attributes = new Set(['class','href','src','alt','loading','crossorigin','referrerpolicy','poster','controls','preload','type','role','target','rel','viewBox','fill','d','aria-label','aria-hidden','tabindex','title','datetime','data-autoload','data-post-id','playsinline','data-page-title','data-page-description','data-media-role','data-media-command','min','max','step','value','selected']);
+  const element = (description: DomDescription): Node => {
     if (typeof description === 'string') return document.createTextNode(description);
     if (!description || !tags.has(description.tag)) throw new Error('Unsupported DOM element');
     const node = ['svg','path'].includes(description.tag)
@@ -37,27 +67,31 @@
     descriptions.set(node, JSON.stringify(description));
     if (description.action) {
       if (node.hasAttribute('data-autoload')) scrollActions.set(node, description.action);
-      const activate = event => { if (!event.isTrusted) return; event.stopPropagation(); node.disabled = true; run(description.action); };
+      const activate = (event: Event) => { if (!event.isTrusted) return; event.stopPropagation(); if (node instanceof HTMLButtonElement) node.disabled = true; run(description.action!); };
       node.addEventListener('click', activate);
-      node.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); activate(event); } });
+      node.addEventListener('keydown', event => { if (event instanceof KeyboardEvent && event.key === 'Enter') { event.preventDefault(); activate(event); } });
     }
     return node;
   };
-  const apply = async data => {
+  const apply = async (data: Presentation | null | undefined): Promise<void> => {
     if (!data) return;
     if (data.view && root) {
       cachedPresentation = data;
       const next = element(data.view), current = root.firstElementChild;
+      if (!(next instanceof Element)) throw new Error('Expected an element view');
+      setMetadata(next);
       if (current?.matches('.x-reader') && next.matches('.x-reader')) {
+        for (const name of ['data-page-title','data-page-description']) { if (next.hasAttribute(name)) current.setAttribute(name,next.getAttribute(name)!); else current.removeAttribute(name); }
         const oldPosts = new Map([...current.children].filter(n => n.hasAttribute('data-post-id')).map(n => [n.getAttribute('data-post-id'), n]));
         const desired = [...next.children].map((n, index) => {
           const old = n.hasAttribute('data-post-id') ? oldPosts.get(n.getAttribute('data-post-id')) : current.children[index];
           return old && !old.matches(':disabled') && !old.querySelector(':disabled') && descriptions.get(old) === descriptions.get(n) ? old : n;
         });
         const keep = new Set(desired);
-        for (const child of [...current.childNodes]) if (!keep.has(child)) child.remove();
+        for (const child of [...current.childNodes]) if (!(child instanceof Element) || !keep.has(child)) { if (child instanceof Element) pauseMedia(child); child.remove(); }
         desired.forEach((child, index) => { if (current.children[index] !== child) current.insertBefore(child, current.children[index] ?? null); });
-      } else root.replaceChildren(next);
+      } else { pauseMedia(root); root.replaceChildren(next); }
+      enhanceMedia(root);
       observeScroll();
     }
     else if (data.message && root) {
@@ -70,7 +104,7 @@
   };
   const checkScroll = () => {
     if (!scrollArmed || autoBusy || !host?.isConnected || Math.abs(scrollY - lastAutoScroll) < 2) return;
-    const sentinel = root?.querySelector('[data-autoload]');
+    const sentinel = root?.querySelector<HTMLButtonElement>('[data-autoload]');
     if (!sentinel || sentinel.disabled) return;
     const box = sentinel.getBoundingClientRect();
     if (box.top > innerHeight + 240 || box.bottom < 0) return;
@@ -83,7 +117,7 @@
   const observeScroll = () => {
     scrollObserver?.disconnect();
     scrollObserver = new IntersectionObserver(() => checkScroll(), { rootMargin: '240px' });
-    const sentinel = root?.querySelector('[data-autoload]');
+    const sentinel = root?.querySelector<HTMLButtonElement>('[data-autoload]');
     if (sentinel) scrollObserver.observe(sentinel);
   };
   // A short feed may not yet make the document scrollable. Downward intent still loads its next batch.
@@ -92,20 +126,20 @@
     scrollArmed = true; lastAutoScroll = -Infinity; requestAnimationFrame(checkScroll);
   }, { passive: true });
   addEventListener('keydown', event => {
-    if (!event.isTrusted || !['End','PageDown','ArrowDown',' '].includes(event.key) || event.target?.closest?.('input,textarea,[contenteditable=true]')) return;
+    if (!event.isTrusted || !['End','PageDown','ArrowDown',' '].includes(event.key) || (event.target instanceof Element && event.target.closest('input,textarea,[contenteditable=true]'))) return;
     scrollArmed = true; lastAutoScroll = -Infinity; requestAnimationFrame(checkScroll);
   });
   addEventListener('scroll', event => {
     if (!event.isTrusted) return;
     requestAnimationFrame(checkScroll);
   }, { passive: true });
-  const run = async message => {
+  const run = async (message: Action): Promise<void> => {
     const attempt = ++revision, sourceUrl = location.href;
     root?.setAttribute('aria-busy', 'true');
     try {
       const response = await send(message);
       if (attempt !== revision || mountedUrl !== sourceUrl || location.href !== sourceUrl || !host?.isConnected) return;
-      if (!response?.ok) { replacingNative = false; restoreNotices(); }
+      if (!response?.ok && !response?.view) { replacingNative = false; restoreNotices(); }
       await apply(response?.ok ? response.data : { ...response, retry: message });
     } catch (error) {
       console.warn('LimitlessX DOM rendering failed:', error);
@@ -116,8 +150,8 @@
   };
   const syncTheme = () => {
       const background = [document.querySelector('[data-testid="primaryColumn"]'), document.body, document.documentElement]
-        .filter(Boolean).map(node => getComputedStyle(node).backgroundColor).find(color => color !== 'rgba(0, 0, 0, 0)' && color !== 'transparent');
-      const dark = background ? background.match(/\d+/g)?.slice(0, 3).reduce((a, b) => a + Number(b), 0) < 384 : matchMedia('(prefers-color-scheme: dark)').matches;
+        .filter((node): node is HTMLElement => node instanceof HTMLElement).map(node => getComputedStyle(node).backgroundColor).find(color => color !== 'rgba(0, 0, 0, 0)' && color !== 'transparent');
+      const dark = background ? (background.match(/\d+/g)?.slice(0, 3).reduce((a, b) => a + Number(b), 0) ?? 0) < 384 : matchMedia('(prefers-color-scheme: dark)').matches;
       if (!themeSheet || themeSignature === background) return;
       themeSignature = background;
       themeSheet.replaceSync(`:host{--bg:${background ?? (dark ? '#000' : '#fff')};--fg:${dark ? '#e7e9ea' : '#0f1419'};--muted:${dark ? '#71767b' : '#536471'};--line:${dark ? '#2f3336' : '#eff3f4'};--panel:${dark ? '#16181c' : '#f7f9f9'}}`);
@@ -135,7 +169,7 @@
       }
       return region;
     }));
-    for (const timeline of primary?.querySelectorAll('[aria-label^="Timeline:"]') ?? []) regions.add(timeline);
+    for (const timeline of primary?.querySelectorAll<HTMLElement>('[aria-label^="Timeline:"]') ?? []) regions.add(timeline);
     for (const node of hiddenNotices.keys()) if (!node.isConnected) hiddenNotices.delete(node);
     for (const node of regions) {
       if (node.contains(host)) continue;
@@ -144,7 +178,7 @@
       node.classList.add('limitlessx-notice-hidden'); node.hidden = true;
     }
   };
-  const present = async context => {
+  const present = async (context: Presentation): Promise<{ok:boolean}> => {
     const sourceUrl = location.href;
     if (!document.querySelector('[data-testid="primaryColumn"]')) {
       deferredPresentation = { url: sourceUrl, context };
@@ -172,10 +206,10 @@
       return { ok: true };
     } catch (error) { console.warn('LimitlessX could not mount its DOM view:', error); clearInline(); styleReady = undefined; return { ok: false }; }
   };
-  const roots = () => [...document.querySelectorAll('[data-testid="primaryColumn"] [data-testid="emptyState"], [data-testid="primaryColumn"] [data-testid="tweetTombstone"]')].slice(0, 8);
-  const signature = node => (node.textContent ?? '').slice(0, 1600);
+  const roots = () => [...document.querySelectorAll<HTMLElement>('[data-testid="primaryColumn"] [data-testid="emptyState"], [data-testid="primaryColumn"] [data-testid="tweetTombstone"]')].slice(0, 8);
+  const signature = (node: HTMLElement) => (node.textContent ?? '').slice(0, 1600);
   let previousNodes = new Map(roots().map(node => [node, signature(node)]));
-  const staleNodes = new Map();
+  const staleNodes = new Map<HTMLElement,{text:string;url:string}>();
   const snapshot = () => {
     const nodes = roots();
     if (location.href !== lastUrl) {
@@ -189,6 +223,7 @@
       const cached = cachedPresentation; clearInline(); present(cached);
     } else if (mountedUrl && mountedUrl !== location.href) clearInline();
     reconcilePlacement();
+    if (mountedUrl === location.href && root?.firstElementChild) setMetadata(root.firstElementChild);
     previousNodes = new Map(nodes.map(node => [node, signature(node)]));
     return {
       url: location.href,
@@ -197,7 +232,7 @@
         if (!stale) return true;
         if (stale.url === location.href || stale.text !== signature(node)) { staleNodes.delete(node); return true; }
         return false;
-      }).map(node => ({ text: signature(node), policy_url: node.querySelector('a[href*="post-withheld-by-country"]')?.href ?? '' })),
+      }).map(node => ({ text: signature(node), policy_url: node.querySelector<HTMLAnchorElement>('a[href*="post-withheld-by-country"]')?.href ?? '' })),
     };
   };
   const inspect = async () => {
@@ -209,10 +244,10 @@
     const attempt = ++generation;
     try {
       const response = await send({ op: 'inspect', notices: context.notices });
-      if (attempt !== generation || url !== location.href || !response?.ok || !response.data.eligible) return;
+      if (attempt !== generation || url !== location.href || !response?.ok || !response.data?.eligible) return;
       const opened = await send({ op: 'auto_detected', notices: context.notices });
       if (attempt !== generation || url !== location.href) return;
-      if (opened?.ok) await present(opened.data);
+      if (opened?.ok && opened.data) await present(opened.data);
     } catch { inspectedKey = undefined; }
   };
   const schedule = () => { clearTimeout(timer); timer = setTimeout(() => { syncTheme(); inspect(); }, 250); };
@@ -226,7 +261,7 @@
   api.runtime.onMessage.addListener((message, sender, respond) => {
     if (sender.id !== api.runtime.id) return;
     if (message?.op === 'snapshot') respond(snapshot());
-    if (message?.op === 'show_inline') {
+    if (message?.op === 'show_inline' && message.context) {
       suppressedRoute = location.href; present(message.context).then(respond); return true;
     }
   });

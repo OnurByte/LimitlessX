@@ -220,6 +220,8 @@ pub struct Profile {
     #[serde(default)]
     pub following: Option<u64>,
     #[serde(default)]
+    pub statuses: Option<u64>,
+    #[serde(default)]
     pub verified: Option<bool>,
     #[serde(default)]
     pub verification_type: Option<String>,

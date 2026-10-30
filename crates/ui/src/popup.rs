@@ -36,7 +36,7 @@ pub fn Popup() -> impl IntoView {
             busy.set(false);
         });
     };
-    view! {<main><Header/><section class="intro"><p class="eyebrow">"PUBLIC CONTENT, WHEN AVAILABLE"</p><p class="tagline">"No VPN."<br/>"No proxy setup."<br/>"No DPI hacks."</p><p class="muted">"An alternative way to read public X content."</p></section>
+    view! {<main><Header/><section class="intro"><p>"Read public X content."</p></section>
         {move ||current.get().map(|c|view!{<section class="current panel"><h2>"Current page"</h2><p class="target">{c.target.label()}</p><p class="context-status">{if c.restricted{"Regional restriction detected"}else{"No regional restriction detected"}}</p><button class="primary" disabled=move ||busy.get() on:click=move |_|open(true)>"View public content"<span aria-hidden="true">"↗"</span></button></section>})}
         <form class="lookup" on:submit=move |ev|{ev.prevent_default();open(false);}>
             <label for="target-input">{move ||if current.get().is_some(){"Or open another profile or post"}else{"X profile or post"}}</label>
@@ -44,9 +44,9 @@ pub fn Popup() -> impl IntoView {
             <button class="primary" disabled=move ||busy.get() || input.get().trim().is_empty()>{move ||if busy.get(){"Opening…"}else{"View on X"}}<span aria-hidden="true">"↗"</span></button>
         </form>
         {move ||error.get().map(|e|view!{<p class="error" role="alert">{e}</p>})}
-        <p class="fine disclosure">"Detected restricted content is looked up automatically through FxTwitter. Private content is unavailable."</p><crate::record::RecordPanel controls=settings/>
+        <p class="fine disclosure">"Restricted public content opens automatically on X."</p><crate::record::RecordPanel controls=settings/>
         <button class="text-button settings-toggle" aria-expanded=move ||settings.get() on:click=move |_|settings.update(|value|*value = !*value)>"Settings"</button>
-        {move ||settings.get().then(||view!{<section class="popup-settings"><div class="prose"><h2>"Your data"</h2><p>"The Record is stored on this device. Only deliberately opened restricted content counts. Automatic displays and manual lookups do not count."</p><p>"FxTwitter receives requested content identifiers and your network address. X media hosts receive connections when media loads. Requests omit credentials. No analytics or X session cookies are used."</p><p>"Unavailable, protected, suspended and deleted content are separate states. Access is not guaranteed."</p></div></section>})}
+        {move ||settings.get().then(||view!{<section class="popup-settings"><div class="prose"><h2>"Your data"</h2><p>"The Record is stored on this device. Successfully displayed restricted accounts and posts count once. Reopening the same content does not increase the total."</p><p>"FxTwitter receives requested content identifiers and your network address. X media hosts receive connections when media loads. Requests omit credentials. No analytics or X session cookies are used."</p><p>"Unavailable, protected, suspended and deleted content are separate states. Access is not guaranteed."</p></div></section>})}
         <Attribution/><Footer/>
     </main>}
 }

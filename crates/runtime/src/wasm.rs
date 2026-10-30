@@ -1,9 +1,10 @@
 use crate::{Sender, Session, authorized};
+use futures::FutureExt;
 use limitless_core::{Error, Notice, Post, Profile, Restriction, Target};
 use limitless_fxtwitter as provider;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use wasm_bindgen::{JsCast, prelude::*};
 use wasm_bindgen_futures::JsFuture;
 
@@ -157,6 +158,7 @@ async fn create_reader(
         pending,
         deliberate,
         restricted: is_restricted,
+        created: next_created(),
         expires: expires.unwrap_or(now() + 10. * 60. * 1000.),
         tab_id,
         allowed_posts: vec![],
@@ -181,6 +183,14 @@ async fn deliver(tab_id: i32, context: Value) -> Result<Value, Error> {
     Ok(json!({"opened":true}))
 }
 
+thread_local! {static LAST_CREATED:Cell<f64>=const{Cell::new(0.)};}
+fn next_created() -> f64 {
+    LAST_CREATED.with(|last| {
+        let value = now().max(last.get() + 0.001);
+        last.set(value);
+        value
+    })
+}
 thread_local! {static COOLDOWN:Cell<f64>=const{Cell::new(0.)};}
 struct Timer(i32);
 impl Drop for Timer {
@@ -301,12 +311,61 @@ async fn get_conversation(
     let (h, b) = fetch_url(provider::conversation_endpoint(id, cursor)?).await?;
     provider::parse_conversation(h, &b, id)
 }
+type IdentityFuture =
+    futures::future::Shared<futures::future::LocalBoxFuture<'static, Result<String, Error>>>;
+thread_local! {static IDENTITIES:RefCell<std::collections::HashMap<String,(f64,IdentityFuture)>>=RefCell::new(std::collections::HashMap::new());}
+async fn resolve_identity(handle: &str) -> Result<String, Error> {
+    let future = IDENTITIES.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        cache.retain(|_, (expires, _)| *expires > now());
+        if let Some((_, future)) = cache.get(handle) {
+            return future.clone();
+        }
+        if cache.len() >= 64 {
+            cache.clear();
+        }
+        let handle = handle.to_string();
+        let query = handle.clone();
+        let future = async move {
+            let (http, body) = fetch_url(provider::identity_endpoint(&query)?).await?;
+            provider::parse_identity(http, &body, &query)
+        }
+        .boxed_local()
+        .shared();
+        cache.insert(handle, (now() + 300_000., future.clone()));
+        future
+    });
+    let result = future.clone().await;
+    if result.is_err() {
+        IDENTITIES.with(|cache| {
+            let mut cache = cache.borrow_mut();
+            if cache
+                .get(handle)
+                .is_some_and(|(_, current)| current.ptr_eq(&future))
+            {
+                cache.remove(handle);
+            }
+        });
+    }
+    result
+}
 async fn get_profile(target: &Target) -> Result<Profile, Error> {
     let Target::Profile { handle } = target else {
         return Err(Error::InvalidTarget);
     };
     let (h, b) = fetch(target, false, None).await?;
-    provider::parse_profile(h, &b, handle)
+    match provider::parse_profile(h, &b, handle) {
+        Err(Error::NotFound) => {
+            let id = resolve_identity(handle).await?;
+            let (h, b) = fetch_url(provider::id_endpoint(&id, false, None)?).await?;
+            let profile = provider::parse_profile(h, &b, handle)?;
+            if profile.id != id {
+                return Err(Error::InvalidResponse);
+            }
+            Ok(profile)
+        }
+        result => result,
+    }
 }
 async fn timeline(
     token: &str,
@@ -317,7 +376,17 @@ async fn timeline(
         return Err(Error::InvalidTarget);
     }
     let (h, b) = fetch(&session.target, true, cursor).await?;
-    let t = provider::parse_timeline(h, &b)?;
+    let t = match provider::parse_timeline(h, &b) {
+        Err(Error::NotFound) => {
+            let Target::Profile { handle } = &session.target else {
+                return Err(Error::InvalidTarget);
+            };
+            let id = resolve_identity(handle).await?;
+            let (h, b) = fetch_url(provider::id_endpoint(&id, true, cursor)?).await?;
+            provider::parse_timeline(h, &b)?
+        }
+        result => result?,
+    };
     for post in &t.posts {
         if !session.allowed_posts.contains(&post.id) && session.allowed_posts.len() < 2000 {
             session.allowed_posts.push(post.id.clone());
@@ -378,7 +447,9 @@ async fn handle(request: Request, sender: Sender) -> Result<Value, Error> {
         Request::Pending => {
             let all: std::collections::HashMap<String, Session> =
                 decode(session_all().await.map_err(|_| Error::Storage)?)?;
-            for (key, mut session) in all {
+            let mut sessions: Vec<_> = all.into_iter().collect();
+            sessions.sort_by(|a, b| b.1.created.total_cmp(&a.1.created));
+            for (key, mut session) in sessions {
                 if session.valid(&session.target, now())
                     && session.bound_to(&sender)
                     && Target::parse(sender.current_url())
@@ -468,7 +539,7 @@ async fn handle(request: Request, sender: Sender) -> Result<Value, Error> {
                             }
                         }
                     }
-                    let record_error = if s.restricted && s.deliberate {
+                    let record_error = if s.restricted {
                         limitless_storage::record(Some(("post", &post.id)), None, false)
                             .await
                             .err()
@@ -515,7 +586,7 @@ async fn handle(request: Request, sender: Sender) -> Result<Value, Error> {
                     if profile.is_some() {
                         profile_error = None;
                     }
-                    let record_error = if s.restricted && s.deliberate {
+                    let record_error = if s.restricted {
                         if let Some(p) = profile.as_ref() {
                             limitless_storage::record(Some(("profile", &p.id)), None, false)
                                 .await
@@ -603,7 +674,22 @@ async fn handle(request: Request, sender: Sender) -> Result<Value, Error> {
             cursor,
         } => {
             let mut s = load_session(&session, Some(&target), &sender).await?;
-            let next = get_conversation(&target, Some(&cursor)).await?;
+            let next = match get_conversation(&target, Some(&cursor)).await {
+                Ok(next) => next,
+                Err(error) => {
+                    let content = s.content.as_mut().ok_or(Error::Expired)?;
+                    content.replies_error = Some(error.to_string());
+                    session_set(&session_key(&session)?, js(&s))
+                        .await
+                        .map_err(|_| Error::Storage)?;
+                    return Ok(
+                        json!({"view":crate::view::reader(s.content.as_ref().unwrap(),&target,&session,s.restricted)}),
+                    );
+                }
+            };
+            if let Some(content) = s.content.as_mut() {
+                content.replies_error = None;
+            }
             for post in &next.replies {
                 if !s.allowed_posts.contains(&post.id) && s.allowed_posts.len() < 2000 {
                     s.allowed_posts.push(post.id.clone());

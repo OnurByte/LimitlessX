@@ -10,3 +10,7 @@ The user's latest instruction supersedes the extension-origin reader, options pa
 - Remove the standalone reader/options resources and all entry points into them. No landing page is required under the revised instruction.
 
 Manual input may navigate to the requested X URL, where the content is injected. A confirmed regional notice starts an automatic public-data request; unrelated errors never do. Short-lived reader tokens remain in isolated extension state and do not appear in page URLs or DOM attributes.
+
+## Release review update (2026-10-30)
+
+The user now explicitly requests TypeScript for handwritten browser adapters. Rust still owns domain/provider/runtime/storage/view decisions. Strict TypeScript is build-time tooling only; packaged output is local JavaScript with no npm runtime dependencies. This supersedes the original no-TypeScript requirement. Successful automatic displays of restricted accounts/posts now count uniquely in The Record; manual unrelated lookups do not. The popup follows design-reference.md and retains By Onur as explicitly requested. X media URLs use a packaged player, without remote X application code.

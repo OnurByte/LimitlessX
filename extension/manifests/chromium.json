@@ -42,6 +42,7 @@
         "https://www.twitter.com/*"
       ],
       "js": [
+        "adapters/player.js",
         "adapters/content.js"
       ],
       "css": [

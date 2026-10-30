@@ -138,3 +138,18 @@ fn accepts_the_actual_live_v2_conversation_shape() {
     assert!(c.next_cursor.is_some());
     assert!(c.post.metrics.likes.is_some());
 }
+
+#[test]
+fn identity_resolution_is_exact_and_never_uses_suggestion_counters() {
+    let body = r#"{"code":200,"users":[{"id":"99","screen_name":"jackfan","protected":false},{"id":"12","screen_name":"Jack","protected":false,"followers":0}]}"#;
+    assert_eq!(
+        limitless_fxtwitter::parse_identity(200, body, "jack").unwrap(),
+        "12"
+    );
+    assert!(limitless_fxtwitter::parse_identity(200, body, "other").is_err());
+    assert!(limitless_fxtwitter::id_endpoint("12/evil", true, None).is_err());
+    assert_eq!(
+        limitless_fxtwitter::id_endpoint("12", true, Some("+/=")).unwrap(),
+        "https://api.fxtwitter.com/2/profile/id:12/statuses?count=5&cursor=%2B%2F%3D"
+    );
+}

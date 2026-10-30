@@ -1,3 +1,5 @@
+> Historical source specification. Later user instructions in [implementation-direction.md](implementation-direction.md) supersede reader/options pages, activation, TypeScript and automatic counter requirements.
+
 > Historical attachment. The user’s later instructions in [implementation-direction.md](implementation-direction.md) supersede its reader-page, activation, logo and standalone-page assumptions.
 
 "

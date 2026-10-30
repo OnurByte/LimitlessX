@@ -1,0 +1,11 @@
+{
+  "name": "limitlessx-browser-adapters",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Build-only TypeScript tooling for LimitlessX browser interoperability",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build:adapters": "tsc"
+  },
+  "devDependencies": { "typescript": "5.9.3" }
+}

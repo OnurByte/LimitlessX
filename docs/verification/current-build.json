@@ -1,7 +1,7 @@
 {
-  "verified_at": "2026-10-29T23:03:37.505792+00:00",
+  "verified_at": "2026-10-30T03:30:41.394752+00:00",
   "native_tests": {
-    "passed": 22,
+    "passed": 23,
     "failed": 0
   },
   "clippy": {
@@ -44,13 +44,17 @@
       "stable existing post DOM during feed append",
       "pagination failure preserves posts and supports retry",
       "short feed downward wheel loads the next batch",
-      "Replies/Media/Reposts same-tab routes use cached typed profile filters; five-item limits persist"
+      "Replies/Media/Reposts same-tab routes use cached typed profile filters; five-item limits persist",
+      "exact UID fallback from username 404; suggestion counts ignored",
+      "live popup automatic counters and metadata restoration",
+      "initial timeline retry, identity error eviction, retained reply pagination and newest session restoration",
+      "packaged media playback, seek, volume, speed, full screen, failure retry and navigation pause"
     ],
     "firefox": [
       "packaged event-page/popup smoke",
       "automatic inline rendering under strict page CSP",
       "no extension reader page",
-      "automatic views remain uncounted",
+      "automatic restricted success counted uniquely",
       "popup settings"
     ],
     "helium": {
@@ -81,8 +85,19 @@
     "firefox": "Controlled X DOM; public live FxTwitter status/20 (event-page Fetch is not intercepted by Firefox BiDi)."
   },
   "wasm_bytes": {
-    "limitless_runtime_bg.wasm": 692573,
-    "limitless_ui_bg.wasm": 254036
+    "limitless_runtime_bg.wasm": 720764,
+    "limitless_ui_bg.wasm": 253771
   },
-  "release_status": "Installed Helium development build. A representative current real regional profile notice verified; provider availability remains inconsistent. Store/signing and broader release gates remain open."
+  "release_status": "Verified local development packages; signing and browser-store publication are not part of this repository delivery.",
+  "typescript": {
+    "compiler": "5.9.3",
+    "strict": true,
+    "typecheck": "passed",
+    "runtime_dependencies": 0
+  },
+  "independent_review": {
+    "findings": 4,
+    "resolved": 4,
+    "test": "tests/browser/review_regressions.py"
+  }
 }

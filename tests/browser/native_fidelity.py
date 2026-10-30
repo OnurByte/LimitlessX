@@ -36,7 +36,7 @@ with sync_playwright() as p,tempfile.TemporaryDirectory(prefix='limitlessx-fidel
   x.get_by_role('button',name='Show more replies').click();x.get_by_text('Second reply page',exact=True).wait_for();assert x.locator('#limitlessx-inline .post-card').count()==3
   assert sum('/conversation/'in u for u in calls)==2
   comment.locator('.post-text').click();x.locator('#limitlessx-inline .detailed-post').get_by_text('Reply from the source',exact=True).wait_for()
-  assert ui.evaluate('chrome.runtime.sendMessage({op:"record"})')['data']['posts']==1
+  assert ui.evaluate('chrome.runtime.sendMessage({op:"record"})')['data']['posts']==2
   z=ctx.new_page();z.goto('https://x.com/jack');z.locator('#limitlessx-inline .x-profile').wait_for();assert z.locator('.x-profile-count').all_text_contents()==['820 Following','9.9M Followers'];assert z.locator('#limitlessx-inline .x-banner').count()==1
   art=ROOT/'tests/browser/artifacts';art.mkdir(exist_ok=True);z.screenshot(path=str(art/'native-profile.png'),full_page=True);x.screenshot(path=str(art/'native-comments.png'),full_page=True)
   print(json.dumps({'profile_metadata':'passed','main_post_17_24':'passed','replies_15_20':'passed','avatar_40_gap_8':'passed','full_width_detailed_body':'passed','reply_pagination':'passed','deliberate_reply_count':'passed','real_heading_detection':'passed'}))

@@ -29,15 +29,15 @@ pub async fn call(message: Value) -> Result<Value, String> {
 }
 #[component]
 pub fn Header() -> impl IntoView {
-    view! {<header class="masthead"><div class="wordmark"><span class="brand-mark" aria-hidden="true" inner_html=include_str!("../../../extension/static/brand/mark.svg")></span><h1>"LimitlessX"</h1></div><span class="edition">"PUBLIC READER"</span></header>}
+    view! {<header class="masthead"><div class="wordmark"><span class="brand-mark" aria-hidden="true" inner_html=include_str!("../../../extension/static/brand/mark.svg")></span><h1>"LimitlessX"</h1></div></header>}
 }
 #[component]
 pub fn Footer() -> impl IntoView {
-    view! {<footer><span class="fine">"LimitlessX"</span><a href="https://github.com/OnurByte/LimitlessX" target="_blank" rel="noopener noreferrer">"GitHub ↗"</a></footer>}
+    view! {<footer><a class="fine" href="https://onur.af" target="_blank" rel="noopener noreferrer">"By Onur"</a><a href="https://github.com/OnurByte/LimitlessX" target="_blank" rel="noopener noreferrer">"GitHub ↗"</a></footer>}
 }
 #[component]
 pub fn Attribution() -> impl IntoView {
-    view! {<p class="attribution">"Public data via "<a href="https://github.com/FxEmbed/FxEmbed" target="_blank" rel="noopener noreferrer">"FxTwitter"</a>". Availability can change."</p>}
+    view! {<p class="attribution">"Public data via "<a href="https://github.com/FxEmbed/FxEmbed" target="_blank" rel="noopener noreferrer">"FxTwitter"</a>"."</p>}
 }
 #[wasm_bindgen(start)]
 pub fn start() {

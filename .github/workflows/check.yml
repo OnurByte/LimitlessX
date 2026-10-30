@@ -7,6 +7,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
       - name: Install pinned Rust and build tools
         run: |
           rustup toolchain install 1.99.1 --profile minimal --component clippy,rustfmt --target wasm32-unknown-unknown
@@ -36,6 +41,9 @@ jobs:
           python3 tests/browser/native_fidelity.py
           python3 tests/browser/lifecycle.py
           python3 tests/browser/infinite_scroll.py
+          python3 tests/browser/identity_recovery.py
+          python3 tests/browser/review_regressions.py
+          python3 tests/browser/media_player.py
       - name: Firefox extension integration
         run: |
           curl -fsSL https://github.com/mozilla/geckodriver/releases/download/v0.37.1/geckodriver-v0.37.1-linux64.tar.gz -o /tmp/geckodriver.tar.gz

@@ -25,11 +25,11 @@ with sync_playwright() as p,tempfile.TemporaryDirectory(prefix='limitlessx-auto-
   x.evaluate("document.body.style.backgroundColor='#15202b'");x.wait_for_timeout(400)
   assert x.locator('#limitlessx-inline .x-reader').evaluate('(n)=>getComputedStyle(n).backgroundColor')=='rgb(21, 32, 43)'
   assert len(calls)==1,'theme change refetched content'
-  assert send({'op':'record'})['data']['posts']==0,'automatic display counted as deliberate'
+  assert send({'op':'record'})['data']['posts']==1,'automatic success was not counted'
   x.bring_to_front();assert send({'op':'open_current'})['ok'];assert send({'op':'record'})['data']['posts']==1
   ui.get_by_role('button',name='Settings',exact=True).click();ui.get_by_label('Keep a private record').uncheck();assert send({'op':'record'})['data']['enabled'] is False
   ui.get_by_role('button',name='Clear record',exact=True).click();assert send({'op':'record'})['data']['posts']==0
   art=ROOT/'tests/browser/artifacts';art.mkdir(exist_ok=True);ui.set_viewport_size({'width':384,'height':800});ui.screenshot(path=str(art/'popup-settings.png'),full_page=True);x.screenshot(path=str(art/'automatic-native-x.png'),full_page=True)
   x.evaluate("history.pushState({},'', '/jack/status/21');document.body.append(document.createElement('div'))");x.locator('#limitlessx-inline').wait_for(state='detached')
   manifest=json.loads((ext/'manifest.json').read_text());assert 'options_ui' not in manifest;assert {p.name for p in ext.glob('*.html')}=={'popup.html'}
-  print(json.dumps({'automatic_injection':'passed','generic_failure_ignored':'passed','native_timeline_style':'passed','single_automatic_request':'passed','no_reader_page':'passed','popup_settings':'passed','navigation_cleanup':'passed','automatic_record_count':0,'deliberate_record_count':1}))
+  print(json.dumps({'automatic_injection':'passed','generic_failure_ignored':'passed','native_timeline_style':'passed','single_automatic_request':'passed','no_reader_page':'passed','popup_settings':'passed','navigation_cleanup':'passed','automatic_record_count':1,'deliberate_record_count':1}))
