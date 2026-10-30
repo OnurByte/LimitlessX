@@ -8,7 +8,7 @@
 
 **No VPN. No proxy setup. No DPI hacks.**
 
-Read region-restricted public X content directly on X.
+Read region-restricted public X (Twitter) content directly on X.
 
 [Open source](LICENSE) ⁜ MIT ⁜ Rust + TypeScript
 
