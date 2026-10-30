@@ -8,16 +8,16 @@
 
 **No VPN. No proxy setup. No DPI hacks.**
 
-Read region-restricted public X (Twitter) content directly on X.
+A browser extension for viewing region-restricted public profiles and posts on X (Twitter).
 
 [![Release](https://img.shields.io/github/v/release/OnurByte/LimitlessX?style=flat&color=555)](https://github.com/OnurByte/LimitlessX/releases/latest)
 [![Checks](https://github.com/OnurByte/LimitlessX/actions/workflows/check.yml/badge.svg)](https://github.com/OnurByte/LimitlessX/actions/workflows/check.yml)
 [![License](https://img.shields.io/github/license/OnurByte/LimitlessX?style=flat&color=555)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/OnurByte/LimitlessX?style=flat&color=555)](https://github.com/OnurByte/LimitlessX/stargazers)
 
-Open source ⁜ Rust + TypeScript
-
 </div>
+
+![LimitlessX off and on: a region-restricted X profile before and after enabling LimitlessX](docs/limitlessx-off-vs-on.png)
 
 ## Download
 
@@ -30,10 +30,10 @@ Open source ⁜ Rust + TypeScript
 
 **Firefox and related browsers:** extract the ZIP, open `about:debugging` → **This Firefox** → **Load Temporary Add-on**, then select `manifest.json`. This unsigned add-on must be loaded again after restarting Firefox.
 
-## Use
+## Usage
 
-Open a region-restricted profile or post on X. Available public content appears automatically. Five posts load first; scroll for more. The popup accepts an `@handle` or X URL and keeps your viewing counts locally.
+Open a region-restricted profile or post on X. The extension loads the public content automatically. Scroll to load more posts, or enter an `@handle` or X URL in the extension popup.
 
-Public data comes from [FxTwitter](https://github.com/FxEmbed/FxEmbed). Availability varies; private accounts are unavailable. No X credentials or analytics. [Privacy](docs/privacy.md) ⁜ [Browser compatibility](docs/compatibility.md)
+Content is fetched through [FxTwitter](https://github.com/FxEmbed/FxEmbed), so some profiles or posts may be unavailable. Private accounts are not supported. The extension does not collect X credentials or analytics; viewing counts are stored locally.
 
-[Build from source](docs/build.md) ⁜ [Architecture](docs/architecture.md) ⁜ [Tests](.github/workflows/check.yml)
+[Privacy](docs/privacy.md) · [Browser compatibility](docs/compatibility.md) · [Build from source](docs/build.md) · [Architecture](docs/architecture.md) · [Tests](.github/workflows/check.yml)
