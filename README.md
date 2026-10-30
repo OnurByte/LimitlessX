@@ -10,20 +10,25 @@
 
 Read region-restricted public X (Twitter) content directly on X.
 
-[Open source](LICENSE) ⁜ MIT ⁜ Rust + TypeScript
+[![Release](https://img.shields.io/github/v/release/OnurByte/LimitlessX?style=flat&color=555)](https://github.com/OnurByte/LimitlessX/releases/latest)
+[![Checks](https://github.com/OnurByte/LimitlessX/actions/workflows/check.yml/badge.svg)](https://github.com/OnurByte/LimitlessX/actions/workflows/check.yml)
+[![License](https://img.shields.io/github/license/OnurByte/LimitlessX?style=flat&color=555)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/OnurByte/LimitlessX?style=flat&color=555)](https://github.com/OnurByte/LimitlessX/stargazers)
+
+Open source ⁜ Rust + TypeScript
 
 </div>
 
 ## Download
 
-| Chrome, Helium, Brave, Edge, Opera, Vivaldi | Firefox |
+| Chrome, Helium, Brave, Edge, Opera, Vivaldi | Firefox, Zen, LibreWolf, Floorp, Waterfox |
 | :---: | :---: |
-| <img src="docs/browsers/chrome.svg" alt="Chrome" width="40" height="40"> <img src="docs/browsers/helium.svg" alt="Helium" width="40" height="40"> <img src="docs/browsers/brave.svg" alt="Brave" width="40" height="40"> <img src="docs/browsers/edge.svg" alt="Edge" width="40" height="40"> <img src="docs/browsers/opera.svg" alt="Opera" width="40" height="40"> <img src="docs/browsers/vivaldi.svg" alt="Vivaldi" width="40" height="40"> | <img src="docs/browsers/firefox.svg" alt="Firefox" width="48" height="48"> |
+| <img src="docs/browsers/chrome.svg" alt="Chrome" width="40" height="40"> <img src="docs/browsers/helium.svg" alt="Helium" width="40" height="40"> <img src="docs/browsers/brave.svg" alt="Brave" width="40" height="40"> <img src="docs/browsers/edge.svg" alt="Edge" width="40" height="40"> <img src="docs/browsers/opera.svg" alt="Opera" width="40" height="40"> <img src="docs/browsers/vivaldi.svg" alt="Vivaldi" width="40" height="40"> | <img src="docs/browsers/firefox.svg" alt="Firefox" width="40" height="40"> <img src="docs/browsers/zen.svg" alt="Zen" width="40" height="40"> <img src="docs/browsers/librewolf.svg" alt="LibreWolf" width="40" height="40"> <img src="docs/browsers/floorp.svg" alt="Floorp" width="40" height="40"> <img src="docs/browsers/waterfox.svg" alt="Waterfox" width="40" height="40"> |
 | [**Download ZIP**](https://github.com/OnurByte/LimitlessX/releases/latest/download/limitlessx-chromium.zip) | [**Download ZIP**](https://github.com/OnurByte/LimitlessX/releases/latest/download/limitlessx-firefox.zip) |
 
 **Chrome and related browsers:** extract the ZIP, open the Extensions page, enable **Developer mode**, then **Load unpacked** and select the extracted folder.
 
-**Firefox:** extract the ZIP, open `about:debugging` → **This Firefox** → **Load Temporary Add-on**, then select `manifest.json`. This unsigned add-on must be loaded again after restarting Firefox.
+**Firefox and related browsers:** extract the ZIP, open `about:debugging` → **This Firefox** → **Load Temporary Add-on**, then select `manifest.json`. This unsigned add-on must be loaded again after restarting Firefox.
 
 ## Use
 
