@@ -1,0 +1,103 @@
+{
+  "verified_at": "2026-10-30T03:30:41.394752+00:00",
+  "native_tests": {
+    "passed": 23,
+    "failed": 0
+  },
+  "clippy": {
+    "native": "passed",
+    "wasm": "passed"
+  },
+  "browser_checks": {
+    "chromium": [
+      "packaged worker/popup smoke",
+      "automatic restricted-content injection",
+      "generic failure ignored",
+      "single request per notice",
+      "native post typography and borders",
+      "dim theme update without refetch",
+      "popup-only HTML",
+      "popup settings",
+      "manual profile injection and pagination",
+      "text-node XSS protection",
+      "post activation in the same container",
+      "tab/source binding",
+      "deduplication",
+      "worker restart",
+      "session expiry before fetch",
+      "SPA route cleanup",
+      "refreshed reused notice",
+      "rate-limit cooldown",
+      "malformed response",
+      "browser restart",
+      "actual Helium notice heading regression",
+      "profile metadata and real v2 conversation normalization",
+      "17/24 main post and 15/20 reply typography",
+      "40px avatar and 8px gap",
+      "reply pagination and deliberate view accounting",
+      "DOM removal recovery and equivalent post URL redirect",
+      "delayed primary column: never mount in body/main",
+      "primary replacement twice without duplicate provider requests",
+      "native timeline arriving after extension mount",
+      "first five posts, five-post buffered scroll increments",
+      "parallel initial profile and timeline requests",
+      "stable existing post DOM during feed append",
+      "pagination failure preserves posts and supports retry",
+      "short feed downward wheel loads the next batch",
+      "Replies/Media/Reposts same-tab routes use cached typed profile filters; five-item limits persist",
+      "exact UID fallback from username 404; suggestion counts ignored",
+      "live popup automatic counters and metadata restoration",
+      "initial timeline retry, identity error eviction, retained reply pagination and newest session restoration",
+      "packaged media playback, seek, volume, speed, full screen, failure retry and navigation pause"
+    ],
+    "firefox": [
+      "packaged event-page/popup smoke",
+      "automatic inline rendering under strict page CSP",
+      "no extension reader page",
+      "automatic restricted success counted uniquely",
+      "popup settings"
+    ],
+    "helium": {
+      "installed": true,
+      "enabled": true,
+      "extension_id": "lbeeopacdoaccgmepkfhilamcdnhibii",
+      "regional_profile": "Actual x.com/ekrem_imamoglu regional notice automatically replaced with public profile. Latest timeline lookup returned not-found; earlier lookup returned posts.",
+      "conversation": "Actual public post 2115761952937128381 rendered with 34 provider replies; native main text 17/24, replies 15/20, avatars 40px and 8px gap.",
+      "inspection": "User-authorized Chrome DevTools MCP connected to existing Helium profile; no browser restart.",
+      "lifecycle_fix": {
+        "before": "Host outside primary: 1225.36px wide under native placeholder",
+        "after": "Host inside primary: 598.18px wide within 600px column; native placeholder hidden; profile and timeline displayed",
+        "normal_navigation": "Public post has no extension host or hidden native regions"
+      },
+      "incremental_feed": {
+        "initial_posts": 5,
+        "after_End": 10,
+        "profile_avatar_natural_width": 200,
+        "initial_requests_start_gap_ms": 0.7,
+        "observed_profile_request_ms": 2649.6,
+        "observed_timeline_request_ms": 3011.4,
+        "note": "Observed live provider latency, not a guaranteed startup time. Upstream may still return 20 posts; only five are rendered initially."
+      }
+    }
+  },
+  "transport_limits": {
+    "chromium": "Controlled provider and X DOM fixtures; real packaged Rust/WASM and IndexedDB.",
+    "firefox": "Controlled X DOM; public live FxTwitter status/20 (event-page Fetch is not intercepted by Firefox BiDi)."
+  },
+  "wasm_bytes": {
+    "limitless_runtime_bg.wasm": 720764,
+    "limitless_ui_bg.wasm": 253771
+  },
+  "release_status": "Verified local development packages; signing and browser-store publication are not part of this repository delivery.",
+  "typescript": {
+    "compiler": "5.9.3",
+    "strict": true,
+    "typecheck": "passed",
+    "runtime_dependencies": 0
+  },
+  "independent_review": {
+    "findings": 4,
+    "resolved": 4,
+    "test": "tests/browser/review_regressions.py"
+  }
+}

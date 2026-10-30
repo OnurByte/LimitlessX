@@ -1,0 +1,129 @@
+{
+  "checked_at": "2026-10-29T20:51:08.303531+00:00",
+  "provider": "FxTwitter v2",
+  "restriction_provenance": "https://www.hrw.org/news/2025/05/08/social-media-companies-should-resist-turkish-state-censorship",
+  "limitations": [
+    "Historical withholding is documented; current X DOM restriction must be separately verified.",
+    "Candidates are not assumed private, deleted or suspended unless the response explicitly identifies that state.",
+    "One successful public lookup is not a guarantee of access."
+  ],
+  "cases": [
+    {
+      "case": "normal_post",
+      "path": "/2/status/20",
+      "http_status": 200,
+      "code": 200,
+      "message": null,
+      "reason": null,
+      "has_user": false,
+      "protected": null,
+      "has_post": true,
+      "post_count": 0,
+      "has_next_cursor": false
+    },
+    {
+      "case": "normal_profile",
+      "path": "/2/profile/github",
+      "http_status": 200,
+      "code": 200,
+      "message": "OK",
+      "reason": null,
+      "has_user": true,
+      "protected": false,
+      "has_post": false,
+      "post_count": 0,
+      "has_next_cursor": false
+    },
+    {
+      "case": "historically_withheld_profile",
+      "path": "/2/profile/ekrem_imamoglu",
+      "http_status": 404,
+      "code": 404,
+      "message": "User not found",
+      "reason": null,
+      "has_user": false,
+      "protected": null,
+      "has_post": false,
+      "post_count": 0,
+      "has_next_cursor": false
+    },
+    {
+      "case": "historically_withheld_timeline",
+      "path": "/2/profile/ekrem_imamoglu/statuses",
+      "http_status": 200,
+      "code": 200,
+      "message": null,
+      "reason": null,
+      "has_user": false,
+      "protected": null,
+      "has_post": false,
+      "post_count": 20,
+      "has_next_cursor": true
+    },
+    {
+      "case": "protected_candidate",
+      "path": "/2/profile/asmallteapot",
+      "http_status": 404,
+      "code": 404,
+      "message": "User not found",
+      "reason": null,
+      "has_user": false,
+      "protected": null,
+      "has_post": false,
+      "post_count": 0,
+      "has_next_cursor": false
+    },
+    {
+      "case": "suspended_candidate",
+      "path": "/2/profile/0",
+      "http_status": 404,
+      "code": 404,
+      "message": "User not found",
+      "reason": null,
+      "has_user": false,
+      "protected": null,
+      "has_post": false,
+      "post_count": 0,
+      "has_next_cursor": false
+    },
+    {
+      "case": "missing_candidate",
+      "path": "/2/profile/lxnonexistent9z",
+      "http_status": 404,
+      "code": 404,
+      "message": "User not found",
+      "reason": null,
+      "has_user": false,
+      "protected": null,
+      "has_post": false,
+      "post_count": 0,
+      "has_next_cursor": false
+    },
+    {
+      "case": "deleted_or_missing_post",
+      "path": "/2/status/1234567890123456789",
+      "http_status": 404,
+      "code": 404,
+      "message": null,
+      "reason": null,
+      "has_user": false,
+      "protected": null,
+      "has_post": false,
+      "post_count": 0,
+      "has_next_cursor": false
+    },
+    {
+      "case": "invalid_request",
+      "path": "/2/status/invalid",
+      "http_status": 400,
+      "code": 400,
+      "message": "id: tweet ID must be a numeric snowflake",
+      "reason": null,
+      "has_user": false,
+      "protected": null,
+      "has_post": false,
+      "post_count": 0,
+      "has_next_cursor": false
+    }
+  ]
+}

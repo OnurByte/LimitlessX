@@ -1,0 +1,15 @@
+# Privacy
+
+LimitlessX has no managed backend, account registration, analytics or telemetry. It does not access X authentication cookies, passwords, private messages or broad browsing history.
+
+When the extension detects a supported regional-withholding notice, it automatically sends that profile or post’s public identifier to api.fxtwitter.com and displays returned data inside X. A manual popup lookup also sends the submitted public identifier. It does not look up every encountered account. Loading an account also requests its public timeline. If username lookup fails, an exact-match public typeahead result resolves the numeric account ID before retrying. Suggestion placeholder counters are never displayed as profile metadata. Explicit pagination requests transmit the provider's cursor. FxTwitter can see the request identifier and network information such as your IP address. Images and videos connect to public X media hosts. Their policies and availability are outside LimitlessX's control.
+
+Extension Fetch requests omit credentials, use no referrer, and reject redirects. Media elements use anonymous cross-origin loading. No remote executable code is used.
+
+The optional Record is stored locally in IndexedDB. It contains a random salt, recording preference, start date and unique salted identifier hashes for successfully displayed restricted profiles/posts, including automatic displays. Reopening the same item does not increase its unique total. Counts derive from these stores. It stores no post bodies, handles or plaintext browsing history. Clear record deletes the ledger and rotates its salt. Disabling recording keeps existing counts while preventing future additions. Uninstalling deletes the browser-managed extension data.
+
+Short-lived reader contexts are held in browser session storage, limited to 100 active sessions with a ten-minute lifetime. They include the requested target, restriction eligibility and IDs returned by the current timeline. They survive worker restarts and are cleared at browser shutdown. They are not part of The Record.
+
+Permissions: `activeTab` reads the currently activated tab context; `storage` holds short-lived reader contexts in browser memory. Host access is limited to api.fxtwitter.com for explicit lookups. Content scripts run only on X/Twitter domains to observe restriction notices. No cookies, webRequest, history or all-sites permission is requested.
+
+LimitlessX is not anonymous, untraceable, a VPN, a proxy service or a private-account viewer. Alternative public content can be incomplete, stale or unavailable.
